@@ -53,19 +53,10 @@ void setup(void)
   Tft.setRotation(3);
 #endif
 
-  int offset_x = 0;
-  int offset_y = 0;
   int width  = Tft.width();
   int height = Tft.height();
   if (width  > 320) width  = 320;
   if (height > 240) height = 240;
-
-#ifdef ARDUINO_M5Stick_C
-// M5Stick-CのLCDは実際の画面サイズと内部メモリサイズが異なる
-// 内部メモリサイズは162x132のため、x=1 y=26のオフセットが必要
-  offset_x = 1;
-  offset_y = 26;
-#endif
 
   Tft.setTextFont(2);
 
@@ -105,8 +96,11 @@ void setup(void)
   Serial.println(String("IP:") + WiFi.localIP().toString());
   Tft.println(WiFi.localIP().toString());
 
-  tcpr.setup( offset_x
-            , offset_y
+  setup_t s;
+  Tft.getSetup(s);
+
+  tcpr.setup( s.r0_x_offset
+            , s.r0_y_offset
             , width
             , height
             , SPI_FREQUENCY
