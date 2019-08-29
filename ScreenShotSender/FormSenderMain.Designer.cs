@@ -32,7 +32,10 @@
             this.btnShowFrame = new System.Windows.Forms.Button();
             this.btnStartStopr = new System.Windows.Forms.Button();
             this.pnlTop1 = new System.Windows.Forms.Panel();
-            this.tbHost = new System.Windows.Forms.TextBox();
+            this.nudRow = new System.Windows.Forms.NumericUpDown();
+            this.label3 = new System.Windows.Forms.Label();
+            this.nudCol = new System.Windows.Forms.NumericUpDown();
+            this.label1 = new System.Windows.Forms.Label();
             this.nudQuality = new System.Windows.Forms.NumericUpDown();
             this.label2 = new System.Windows.Forms.Label();
             this.nudHeight = new System.Windows.Forms.NumericUpDown();
@@ -43,7 +46,10 @@
             this.pnlTop2 = new System.Windows.Forms.Panel();
             this.lblHeight = new System.Windows.Forms.Label();
             this.lblWidth = new System.Windows.Forms.Label();
+            this.tlpHost = new System.Windows.Forms.TableLayoutPanel();
             this.pnlTop1.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)(this.nudRow)).BeginInit();
+            ((System.ComponentModel.ISupportInitialize)(this.nudCol)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.nudQuality)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.nudHeight)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.nudWidth)).BeginInit();
@@ -76,7 +82,10 @@
             // 
             // pnlTop1
             // 
-            this.pnlTop1.Controls.Add(this.tbHost);
+            this.pnlTop1.Controls.Add(this.nudRow);
+            this.pnlTop1.Controls.Add(this.label3);
+            this.pnlTop1.Controls.Add(this.nudCol);
+            this.pnlTop1.Controls.Add(this.label1);
             this.pnlTop1.Controls.Add(this.btnStartStopr);
             this.pnlTop1.Controls.Add(this.btnShowFrame);
             this.pnlTop1.Dock = System.Windows.Forms.DockStyle.Top;
@@ -85,15 +94,79 @@
             this.pnlTop1.Size = new System.Drawing.Size(334, 19);
             this.pnlTop1.TabIndex = 2;
             // 
-            // tbHost
+            // nudRow
             // 
-            this.tbHost.Dock = System.Windows.Forms.DockStyle.Left;
-            this.tbHost.Location = new System.Drawing.Point(162, 0);
-            this.tbHost.Margin = new System.Windows.Forms.Padding(1, 2, 1, 2);
-            this.tbHost.Name = "tbHost";
-            this.tbHost.Size = new System.Drawing.Size(77, 19);
-            this.tbHost.TabIndex = 2;
-            this.tbHost.Text = "192.168.1.1";
+            this.nudRow.Dock = System.Windows.Forms.DockStyle.Left;
+            this.nudRow.Location = new System.Drawing.Point(246, 0);
+            this.nudRow.Margin = new System.Windows.Forms.Padding(2);
+            this.nudRow.Maximum = new decimal(new int[] {
+            4,
+            0,
+            0,
+            0});
+            this.nudRow.Minimum = new decimal(new int[] {
+            1,
+            0,
+            0,
+            0});
+            this.nudRow.Name = "nudRow";
+            this.nudRow.Size = new System.Drawing.Size(41, 19);
+            this.nudRow.TabIndex = 4;
+            this.nudRow.Value = new decimal(new int[] {
+            1,
+            0,
+            0,
+            0});
+            this.nudRow.ValueChanged += new System.EventHandler(this.nudRow_ValueChanged);
+            // 
+            // label3
+            // 
+            this.label3.AutoSize = true;
+            this.label3.Dock = System.Windows.Forms.DockStyle.Left;
+            this.label3.Location = new System.Drawing.Point(223, 0);
+            this.label3.MinimumSize = new System.Drawing.Size(0, 19);
+            this.label3.Name = "label3";
+            this.label3.Size = new System.Drawing.Size(23, 19);
+            this.label3.TabIndex = 7;
+            this.label3.Text = "row";
+            this.label3.TextAlign = System.Drawing.ContentAlignment.MiddleRight;
+            // 
+            // nudCol
+            // 
+            this.nudCol.Dock = System.Windows.Forms.DockStyle.Left;
+            this.nudCol.Location = new System.Drawing.Point(182, 0);
+            this.nudCol.Margin = new System.Windows.Forms.Padding(2);
+            this.nudCol.Maximum = new decimal(new int[] {
+            4,
+            0,
+            0,
+            0});
+            this.nudCol.Minimum = new decimal(new int[] {
+            1,
+            0,
+            0,
+            0});
+            this.nudCol.Name = "nudCol";
+            this.nudCol.Size = new System.Drawing.Size(41, 19);
+            this.nudCol.TabIndex = 3;
+            this.nudCol.Value = new decimal(new int[] {
+            1,
+            0,
+            0,
+            0});
+            this.nudCol.ValueChanged += new System.EventHandler(this.nudCol_ValueChanged);
+            // 
+            // label1
+            // 
+            this.label1.AutoSize = true;
+            this.label1.Dock = System.Windows.Forms.DockStyle.Left;
+            this.label1.Location = new System.Drawing.Point(162, 0);
+            this.label1.MinimumSize = new System.Drawing.Size(0, 19);
+            this.label1.Name = "label1";
+            this.label1.Size = new System.Drawing.Size(20, 19);
+            this.label1.TabIndex = 6;
+            this.label1.Text = "col";
+            this.label1.TextAlign = System.Drawing.ContentAlignment.MiddleRight;
             // 
             // nudQuality
             // 
@@ -108,6 +181,7 @@
             0,
             0,
             0});
+            this.nudQuality.ValueChanged += new System.EventHandler(this.nudQuality_ValueChanged);
             // 
             // label2
             // 
@@ -175,7 +249,7 @@
             this.pbPreview.Dock = System.Windows.Forms.DockStyle.Fill;
             this.pbPreview.Location = new System.Drawing.Point(0, 0);
             this.pbPreview.Name = "pbPreview";
-            this.pbPreview.Size = new System.Drawing.Size(334, 242);
+            this.pbPreview.Size = new System.Drawing.Size(334, 243);
             this.pbPreview.SizeMode = System.Windows.Forms.PictureBoxSizeMode.Zoom;
             this.pbPreview.TabIndex = 3;
             this.pbPreview.TabStop = false;
@@ -189,9 +263,9 @@
             // 
             this.pnlAll.Controls.Add(this.pbPreview);
             this.pnlAll.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.pnlAll.Location = new System.Drawing.Point(0, 36);
+            this.pnlAll.Location = new System.Drawing.Point(0, 58);
             this.pnlAll.Name = "pnlAll";
-            this.pnlAll.Size = new System.Drawing.Size(334, 242);
+            this.pnlAll.Size = new System.Drawing.Size(334, 243);
             this.pnlAll.TabIndex = 4;
             // 
             // pnlTop2
@@ -203,7 +277,7 @@
             this.pnlTop2.Controls.Add(this.nudWidth);
             this.pnlTop2.Controls.Add(this.lblWidth);
             this.pnlTop2.Dock = System.Windows.Forms.DockStyle.Top;
-            this.pnlTop2.Location = new System.Drawing.Point(0, 19);
+            this.pnlTop2.Location = new System.Drawing.Point(0, 41);
             this.pnlTop2.Name = "pnlTop2";
             this.pnlTop2.Size = new System.Drawing.Size(334, 17);
             this.pnlTop2.TabIndex = 5;
@@ -232,13 +306,28 @@
             this.lblWidth.Text = "width";
             this.lblWidth.TextAlign = System.Drawing.ContentAlignment.MiddleRight;
             // 
+            // tlpHost
+            // 
+            this.tlpHost.BackColor = System.Drawing.SystemColors.Control;
+            this.tlpHost.ColumnCount = 1;
+            this.tlpHost.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 100F));
+            this.tlpHost.Dock = System.Windows.Forms.DockStyle.Top;
+            this.tlpHost.Location = new System.Drawing.Point(0, 19);
+            this.tlpHost.Margin = new System.Windows.Forms.Padding(0);
+            this.tlpHost.Name = "tlpHost";
+            this.tlpHost.RowCount = 1;
+            this.tlpHost.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 18F));
+            this.tlpHost.Size = new System.Drawing.Size(334, 22);
+            this.tlpHost.TabIndex = 3;
+            // 
             // FormSenderMain
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 12F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(334, 278);
+            this.ClientSize = new System.Drawing.Size(334, 301);
             this.Controls.Add(this.pnlAll);
             this.Controls.Add(this.pnlTop2);
+            this.Controls.Add(this.tlpHost);
             this.Controls.Add(this.pnlTop1);
             this.Name = "FormSenderMain";
             this.Text = "ScreenShotSender";
@@ -246,6 +335,8 @@
             this.Shown += new System.EventHandler(this.FormSenderMain_Shown);
             this.pnlTop1.ResumeLayout(false);
             this.pnlTop1.PerformLayout();
+            ((System.ComponentModel.ISupportInitialize)(this.nudRow)).EndInit();
+            ((System.ComponentModel.ISupportInitialize)(this.nudCol)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.nudQuality)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.nudHeight)).EndInit();
             ((System.ComponentModel.ISupportInitialize)(this.nudWidth)).EndInit();
@@ -264,7 +355,6 @@
         private System.Windows.Forms.Panel pnlTop1;
         private System.Windows.Forms.PictureBox pbPreview;
         private System.Windows.Forms.Timer timer1;
-        private System.Windows.Forms.TextBox tbHost;
         private System.Windows.Forms.Panel pnlAll;
         private System.Windows.Forms.NumericUpDown nudWidth;
         private System.Windows.Forms.NumericUpDown nudHeight;
@@ -273,6 +363,11 @@
         private System.Windows.Forms.Label lblWidth;
         private System.Windows.Forms.NumericUpDown nudQuality;
         private System.Windows.Forms.Label label2;
+        private System.Windows.Forms.NumericUpDown nudRow;
+        private System.Windows.Forms.TableLayoutPanel tlpHost;
+        private System.Windows.Forms.NumericUpDown nudCol;
+        private System.Windows.Forms.Label label3;
+        private System.Windows.Forms.Label label1;
     }
 }
 
