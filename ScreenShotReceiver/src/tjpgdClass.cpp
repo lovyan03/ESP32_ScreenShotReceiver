@@ -26,7 +26,7 @@
 
 #include "tjpgdClass.h"
 
-#include <arduino.h>
+#include <Arduino.h>
 #include <esp_task.h>
 
 /*-----------------------------------------------*/
