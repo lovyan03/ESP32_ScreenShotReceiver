@@ -38,20 +38,36 @@
 #include "src/TCPReceiver.h"
 #include "src/DMADrawer.h"
 
-TCPReceiver tcpr;
+TCPReceiver recv;
 
 void setup(void)
 {
-
 #if defined(ARDUINO_M5Stack_Core_ESP32) || defined(ARDUINO_M5STACK_FIRE) || defined(ARDUINO_M5Stick_C)
   M5.begin();
-  Tft.setRotation(1);
+  #ifdef __M5STACKUPDATER_H
+    if(digitalRead(BUTTON_A_PIN) == 0) {
+       Serial.println("Will Load menu binary");
+       updateFromFS(SD);
+       ESP.restart();
+    }
+  #endif
 #else
   Serial.begin(115200);
   Serial.flush();
   Tft.begin();
-  Tft.setRotation(3);
+
+  #ifdef TFT_BL
+    if (TFT_BL >= 0) {
+      ledcAttachPin(TFT_BL, 1);
+      ledcSetup(1, 12000, 8);
+      ledcWrite(1, 128);
+    }
+  #endif
 #endif
+
+  Tft.setRotation(0);
+  if (Tft.width() < Tft.height())
+    Tft.setRotation(1);
 
   int width  = Tft.width();
   int height = Tft.height();
@@ -59,14 +75,6 @@ void setup(void)
   if (height > 240) height = 240;
 
   Tft.setTextFont(2);
-
-#ifdef __M5STACKUPDATER_H
-  if(digitalRead(BUTTON_A_PIN) == 0) {
-     Serial.println("Will Load menu binary");
-     updateFromFS(SD);
-     ESP.restart();
-  }
-#endif
 
   Serial.println("WiFi begin.");
   Tft.println("WiFi begin.");
@@ -99,11 +107,15 @@ void setup(void)
   setup_t s;
   Tft.getSetup(s);
 
-  tcpr.setup( s.r0_x_offset
+  int spi_freq = SPI_FREQUENCY;
+//  もし80MHzの設定でリブートループになる場合は40MHzに落としてみてください。
+//  if (spi_freq > 40000000)  spi_freq = 40000000;
+
+  recv.setup( s.r0_x_offset
             , s.r0_y_offset
             , width
             , height
-            , SPI_FREQUENCY
+            , spi_freq
             , TFT_MOSI
             , TFT_MISO
             , TFT_SCLK
@@ -114,5 +126,5 @@ void setup(void)
 
 void loop(void)
 {
-  tcpr.loop();
+  recv.loop();
 }

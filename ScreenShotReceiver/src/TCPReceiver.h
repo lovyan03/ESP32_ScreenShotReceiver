@@ -3,9 +3,6 @@
 
 #pragma GCC optimize ("O3")
 
-//#include <vector>
-//#include <algorithm>
-
 #include <WiFi.h>
 #include <WiFiServer.h>
 #include <driver/spi_master.h>
@@ -35,16 +32,6 @@ public:
 
     Serial.println("TCPReceiver setup done.");
     return true;
-  }
-
-  void close()
-  {
-    _client = _tcp.available();
-    if (_client.connected()) _client.stop();
-    _jdec.multitask_end();
-    delay(100);
-    _tcp.stop();
-    DMADrawer::close();
   }
 
   bool loop()
@@ -132,11 +119,15 @@ private:
   uint16_t _tft_offset_y;
   uint16_t _tft_width;
   uint16_t _tft_height;
+  uint16_t _out_width;
+  uint16_t _out_height;
+  int16_t _off_x;
+  int16_t _off_y;
   int16_t _jpg_x;
   int16_t _jpg_y;
   uint16_t _drawCount = 0;
   uint16_t _delayCount = 0;
-  uint8_t _lineskip = 2;
+  uint8_t _rowskip = 2;
   uint8_t _tcpBuf[TCP_BUF_LEN];
   bool _recv_requested = false;
 
@@ -144,10 +135,6 @@ private:
     TCPReceiver* me = (TCPReceiver*)jdec->device;
     WiFiClient* client = &me->_client;
     uint16_t retry;
-    if (!client->connected()) {
-      Serial.println("jpgRead fail: disconnected.");
-      return 0;
-    }
 
     if (len == TJPGD_SZBUF) {
       if (me->_recv_requested) {
@@ -192,21 +179,51 @@ private:
   static uint16_t jpgWrite(TJpgD *jdec, void *bitmap, JRECT *rect) {
     TCPReceiver* me = (TCPReceiver*)jdec->device;
     uint16_t *dst = DMADrawer::getNextBuffer();
+    uint16_t x = rect->left;
+    uint16_t y = rect->top;
+    uint16_t w = rect->right + 1 - x;
+    uint16_t h = rect->bottom + 1 - y;
+    uint16_t outWidth = me->_out_width;
+    uint16_t outHeight = me->_out_height;
     uint16_t *data = (uint16_t*)bitmap;
-    uint16_t width = std::min(jdec->width, me->_tft_width);
-    int16_t x = rect->left;
-    int16_t y = rect->top;
-    uint8_t w = rect->right + 1 - x;
-    uint8_t h = rect->bottom + 1 - y;
-    uint8_t line;
+    uint16_t oL = 0, oR = 0;
 
-    dst += x + width * (y % ((1 + me->_lineskip) * jdec->msy << 3));
+    if (rect->right < me->_off_x)      return 1;
+    if (x >= (me->_off_x + outWidth))  return 1;
+    if (rect->bottom < me->_off_y)     return 1;
+    if (y >= (me->_off_y + outHeight)) return 1;
+
+    uint16_t tmpy = y % ((1 + me->_rowskip) * jdec->msy << 3);
+    if (me->_off_y > y) {
+      uint16_t linesToSkip = me->_off_y - y;
+      data += linesToSkip * w;
+      h -= linesToSkip;
+      dst -= tmpy * outWidth;
+    } else 
+    if (me->_off_y > (y - tmpy)) {
+      uint16_t linesToSkip = me->_off_y - (y - tmpy);
+      dst -= linesToSkip * outWidth;
+    }
+
+    if (me->_off_x > x) {
+      oL = me->_off_x - x;
+    }
+    if (rect->right >= (me->_off_x + outWidth)) {
+      oR = (rect->right + 1) - (me->_off_x + outWidth);
+    }
+
+    int16_t line;
+
+    dst += x - me->_off_x + outWidth * tmpy;
     while (h--) {
-      line = w;
+      data += oL;
+      dst += oL;
+      line = w - ( oL + oR );
       while (line--) {
         *dst++ = *data++;
       }
-      dst += width - w;
+      dst += outWidth - w + oR;
+      data += oR;
     }
 
     return 1;
@@ -214,57 +231,54 @@ private:
 
   static uint16_t jpgWriteRow(TJpgD *jdec, uint16_t y, uint8_t h) {
     TCPReceiver* me = (TCPReceiver*)jdec->device;
-    DMADrawer::draw( me->_tft_offset_x + (0 > me->_jpg_x ? 0 : me->_jpg_x)
-                   , me->_tft_offset_y +  me->_jpg_y + y
-                   , std::min(jdec->width, me->_tft_width)
+
+    int16_t outY = y - me->_off_y;
+    if (outY < 0) {
+      if (h <= - outY) return 1;
+      h += outY;
+      outY = 0;
+    }
+    if (me->_tft_height <= me->_jpg_y + outY) return 1;
+    if (me->_tft_height < me->_jpg_y + outY + h) {
+      h = me->_tft_height - (me->_jpg_y + outY);
+    }
+
+    DMADrawer::draw( me->_tft_offset_x + me->_jpg_x
+                   , me->_tft_offset_y + me->_jpg_y + outY
+                   , me->_out_width
                    , h
                    );
     return 1;
   }
 
-
-//  uint32_t _micros0 = 0;
-//  std::vector<uint32_t> micros1, micros2, micros3;
-
   bool drawJpg() {
-//    uint32_t ms1 = micros();
     JRESULT jres = _jdec.prepare(jpgRead, this);
     if (jres != JDR_OK) {
       Serial.printf("prepare failed! %d\r\n", jres);
       return false;
     }
-//    uint32_t ms2 = micros();
+    _out_width = std::min(_jdec.width, _tft_width);
     _jpg_x = (_tft_width - _jdec.width) / 2;
+    _out_height = std::min(_jdec.height, _tft_height);
     _jpg_y = (_tft_height- _jdec.height) / 2;
+    if (0 > _jpg_x) {
+      _off_x = - _jpg_x;
+      _jpg_x = 0;
+    } else {
+      _off_x = 0;
+    }
+    if (0 > _jpg_y) {
+      _off_y = - _jpg_y;
+      _jpg_y = 0;
+    } else {
+      _off_y = 0;
+    }
 
-//  jres = _jdec.decomp(jpgWrite, jpgWriteRow, _lineskip);
-    jres = _jdec.decomp_multitask(jpgWrite, jpgWriteRow, _lineskip);
-//  uint32_t ms3 = micros();
+    jres = _jdec.decomp_multitask(jpgWrite, jpgWriteRow, _rowskip);
     if (jres != JDR_OK) {
       Serial.printf("decomp failed! %d\r\n", jres);
       return false;
     }
-/*
-    if (true) {
-    //Serial.printf("micros: %d:%d:%d\r\n", ms2 - ms1, ms3 - ms2, ms1 - _ms);
-      micros1.push_back(ms2 - ms1);
-      micros2.push_back(ms3 - ms2);
-      micros3.push_back(ms1 - _micros0);
-      if (micros1.size() == 31) {
-        std::nth_element(micros1.begin(), micros1.begin() + 15, micros1.end());
-        std::nth_element(micros2.begin(), micros2.begin() + 15, micros2.end());
-        std::nth_element(micros3.begin(), micros3.begin() + 15, micros3.end());
-        Serial.printf( "micros: %d:%d:%d\r\n"
-                     , micros1[15]
-                     , micros2[15]
-                     , micros3[15]);
-        micros1.clear();
-        micros2.clear();
-        micros3.clear();
-      }
-    }
-    _micros0 = micros();
-//*/
     return true;
   }
 };
