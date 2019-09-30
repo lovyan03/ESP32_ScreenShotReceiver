@@ -19,8 +19,8 @@ Shiftキーを押しながらカーソルキーを操作することで幅と高
 ## Requirement
 動作には以下のライブラリが必要です。  
 
+* https://github.com/Bodmer/TFT_eSPI
 * https://github.com/tobozo/M5Stack-SD-Updater/  
-
 
 ## Licence
 
