@@ -130,13 +130,13 @@ static const uint8_t Clip8[1024] = {
 #else	/* JD_TBLCLIP */
 
 inline uint8_t BYTECLIP (
-	int16_t val
+	int32_t val
 )
 {
 	if (val < 0) val = 0;
-	if (val > 255) val = 255;
+	else if (val > 255) val = 255;
 
-	return (uint8_t)val;
+	return val;
 }
 
 #endif
@@ -148,7 +148,7 @@ inline uint8_t BYTECLIP (
 /*----------------------------------*/
 
 #define dma565Color(r, g, b) \
-    (uint16_t)(((uint8_t)(r) & 0xF8) | ((uint8_t)(b) & 0xF8) << 5 | ((uint8_t)(g) & 0xE0) >> 5 | ((uint8_t)(g) & 0x1C) << 11)
+        (uint16_t)( ((b >> 3) << 8) | ((g >> 2) << 13) | ((g >> 5) | ((r>>3)<<3)))
 
 
 /*-----------------------------------------------------------------------*/
@@ -187,25 +187,21 @@ static int create_qt_tbl (	/* 0:OK, !0:Failed */
 	uint16_t ndata			/* Size of input data */
 )
 {
-	uint16_t i;
 	uint8_t d, z;
 	int32_t *pb;
 
-
-	while (ndata) {	/* Process all tables in the segment */
-		if (ndata < 65) return JDR_FMT1;	/* Err: table size is unaligned */
-		ndata -= 65;
+	do {	/* Process all tables in the segment */
 		d = *data++;							/* Get table property */
 		if (d & 0xF0) return JDR_FMT1;			/* Err: not 8-bit resolution */
-		i = d & 3;								/* Get table ID */
 		pb = (int32_t*)alloc_pool(jd, 64 * sizeof (int32_t));/* Allocate a memory block for the table */
 		if (!pb) return JDR_MEM1;				/* Err: not enough memory */
-		jd->qttbl[i] = pb;						/* Register the table */
-		for (i = 0; i < 64; i++) {				/* Load the table */
+		jd->qttbl[d & 3] = pb;						/* Register the table */
+		for (size_t i = 0; i < 64; i++) {				/* Load the table */
 			z = ZIG(i);							/* Zigzag-order to raster-order conversion */
-			pb[z] = (int32_t)((uint32_t)*data++ * IPSF(z));	/* Apply scale factor of Arai algorithm to the de-quantizers */
+			pb[z] = (int32_t)((uint32_t)data[i] * IPSF(z));	/* Apply scale factor of Arai algorithm to the de-quantizers */
 		}
-	}
+		data += 64;
+	} while (ndata -= 65);
 
 	return JDR_OK;
 }
@@ -223,43 +219,40 @@ static int create_huffman_tbl (	/* 0:OK, !0:Failed */
 	uint16_t ndata				/* Size of input data */
 )
 {
-	uint8_t i, j, b, np, cls, num, d, *pb, *pd;
-	uint16_t hc, *ph;
+	uint_fast16_t d, b, np, cls, num, hc;
+	uint8_t *pb, *pd;
+	uint16_t *ph;
 
 
-	while (ndata) {	/* Process all tables in the segment */
-		if (ndata < 17) return JDR_FMT1;	/* Err: wrong data size */
-		ndata -= 17;
+	do {	/* Process all tables in the segment */
 		d = *data++;						/* Get table number and class */
 		if (d & 0xEE) return JDR_FMT1;		/* Err: invalid class/number */
 		cls = d >> 4; num = d & 0x0F;		/* class = dc(0)/ac(1), table number = 0/1 */
 		pb = (uint8_t*)alloc_pool(jd, 16);			/* Allocate a memory block for the bit distribution table */
 		if (!pb) return JDR_MEM1;			/* Err: not enough memory */
-		jd->huffbits[num][cls] = pb;
-		for (np = i = 0; i < 16; i++) {		/* Load number of patterns for 1 to 16-bit code */
-			np += (pb[i] = *data++);		/* Get sum of code words for each code */
+		jd->huffbits[num][cls] = pb - 1;
+		np = 0;
+		for (size_t i = 0; i < 16; ++i) {		/* Load number of patterns for 1 to 16-bit code */
+			np += (pb[i] = data[i]);		/* Get sum of code words for each code */
 		}
+
 		ph = (uint16_t*)alloc_pool(jd, (uint16_t)(np * sizeof (uint16_t)));/* Allocate a memory block for the code word table */
 		if (!ph) return JDR_MEM1;			/* Err: not enough memory */
-		jd->huffcode[num][cls] = ph;
+		jd->huffcode[num][cls] = ph - 1;
 		hc = 0;
-		for (j = i = 0; i < 16; i++) {		/* Re-build huffman code word table */
+		for (size_t i = 0; i < 16; ++i) {		/* Re-build huffman code word table */
 			b = pb[i];
-			while (b--) ph[j++] = hc++;
+			while (b--) *ph++ = hc++;
 			hc <<= 1;
 		}
 
-		if (ndata < np) return JDR_FMT1;	/* Err: wrong data size */
-		ndata -= np;
 		pd = (uint8_t*)alloc_pool(jd, np);			/* Allocate a memory block for the decoded data */
 		if (!pd) return JDR_MEM1;			/* Err: not enough memory */
-		jd->huffdata[num][cls] = pd;
-		for (i = 0; i < np; i++) {			/* Load decoded data corresponds to each code ward */
-			d = *data++;
-			if (!cls && d > 11) return JDR_FMT1;
-			*pd++ = d;
-		}
-	}
+		jd->huffdata[num][cls] = pd - 1;
+
+		memcpy(pd, data += 16, np);		/* Load decoded data corresponds to each code ward */
+		data += np;
+	} while (ndata -= 17 + np);
 
 	return JDR_OK;
 }
@@ -273,14 +266,16 @@ static int create_huffman_tbl (	/* 0:OK, !0:Failed */
 
 static int16_t bitext (	/* >=0: extracted data, <0: error code */
 	TJpgD* jd,		/* Pointer to the decompressor object */
-	int16_t nbit		/* Number of bits to extract (1 to 11) */
+	int_fast16_t nbit		/* Number of bits to extract (1 to 11) */
 )
 {
-	uint8_t msk, s, f, *dp;
-	uint16_t dc, v;
+	uint8_t *dp;
+	uint_fast8_t msk, s, f;
+	uint_fast16_t dc, v;
 
 	msk = jd->dmsk; dc = jd->dctr; dp = jd->dptr;	/* Bit mask, number of data available, read ptr */
 	s = *dp; v = f = 0;
+	size_t shift;
 	do {
 		if (!msk) {				/* Next byte? */
 			if (!dc) {			/* No input data is available, re-fill input buffer */
@@ -291,23 +286,25 @@ static int16_t bitext (	/* >=0: extracted data, <0: error code */
 				dp++;			/* Next data ptr */
 			}
 			dc--;				/* Decrement number of available bytes */
-			if (f) {			/* In flag sequence? */
-				f = 0;			/* Exit flag sequence */
-				if (*dp != 0) return 0 - (int16_t)JDR_FMT1;	/* Err: unexpected flag is detected (may be collapted data) */
-				*dp = s = 0xFF;			/* The flag is a data 0xFF */
-			} else {
+			if (!f) {			/* Not in flag sequence? */
 				s = *dp;				/* Get next data byte */
 				if (s == 0xFF) {		/* Is start of flag sequence? */
-					f = 1; continue;	/* Enter flag sequence */
+					f = 1;
+					shift = 0;
+					continue;	/* Enter flag sequence */
 				}
+			} else {
+				f = 0;			/* Exit flag sequence */
+				if (*dp != 0) return 0 - (int32_t)JDR_FMT1;	/* Err: unexpected flag is detected (may be collapted data) */
+				*dp = s = 0xFF;			/* The flag is a data 0xFF */
 			}
-			msk = 0x80;		/* Read from MSB */
+
+			msk = 8;		/* Read from MSB */
 		}
-		v <<= 1;	/* Get a bit */
-		if (s & msk) v++;
-		msk >>= 1;
-		nbit--;
-	} while (nbit);
+		shift = msk < nbit ? msk : nbit;
+		msk -= shift;
+		v = (v << shift) | ((s >> msk) & ((1 << shift) - 1));	/* Get a bit */
+	} while (nbit -= shift);
 	jd->dmsk = msk; jd->dctr = dc; jd->dptr = dp;
 
 	return v;
@@ -327,8 +324,9 @@ static int16_t huffext (	/* >=0: decoded data, <0: error code */
 	const uint8_t* hdata	/* Pointer to the data table */
 )
 {
-	uint8_t msk, s, f, bl, nd, *dp;
-	uint16_t dc, v;
+	uint_fast8_t msk, s, f, bl, nd;
+	uint8_t *dp;
+	uint_fast16_t dc, v;
 
 
 	msk = jd->dmsk; dc = jd->dctr; dp = jd->dptr;	/* Bit mask, number of data available, read ptr */
@@ -344,31 +342,30 @@ static int16_t huffext (	/* >=0: decoded data, <0: error code */
 				dp++;	/* Next data ptr */
 			}
 			dc--;		/* Decrement number of available bytes */
-			if (f) {		/* In flag sequence? */
-				f = 0;		/* Exit flag sequence */
-				if (*dp != 0) return 0 - (int16_t)JDR_FMT1;	/* Err: unexpected flag is detected (may be collapted data) */
-				*dp = s = 0xFF;			/* The flag is a data 0xFF */
-			} else {
+			if (!f) {		/* Not in flag sequence? */
 				s = *dp;				/* Get next data byte */
 				if (s == 0xFF) {		/* Is start of flag sequence? */
-					f = 1; continue;	/* Enter flag sequence, get trailing byte */
+					++bl;
+					f = 1;
+					continue;	/* Enter flag sequence, get trailing byte */
 				}
+			} else {
+				f = 0;		/* Exit flag sequence */
+				if (*dp != 0) return 0 - (int32_t)JDR_FMT1;	/* Err: unexpected flag is detected (may be collapted data) */
+				*dp = s = 0xFF;			/* The flag is a data 0xFF */
 			}
-			msk = 0x80;		/* Read from MSB */
+			msk = 8;		/* Read from MSB */
 		}
-		v <<= 1;	/* Get a bit */
-		if (s & msk) v++;
-		msk >>= 1;
+		v = (v << 1) | ((s >> (--msk)) & 1);	/* Get a bit */
 
-		for (nd = *hbits++; nd; nd--) {	/* Search the code word in this bit length */
-			if (v == *hcode++) {		/* Matched? */
+		for (nd = *++hbits; nd; --nd) {	/* Search the code word in this bit length */
+			++hdata;
+			if (v == *++hcode) {		/* Matched? */
 				jd->dmsk = msk; jd->dctr = dc; jd->dptr = dp;
 				return *hdata;			/* Return the decoded data */
 			}
-			hdata++;
 		}
-		bl--;
-	} while (bl);
+	} while (--bl);
 
 	return 0 - (int16_t)JDR_FMT1;	/* Err: code not found (may be collapted data) */
 }
@@ -385,11 +382,11 @@ static void block_idct (
 	uint8_t* dst	/* Pointer to the destination to store the block as byte array */
 )
 {
-	const int32_t M13 = (int32_t)(1.41421*4096), M2 = (int32_t)(1.08239*4096), M4 = (int32_t)(2.61313*4096), M5 = (int32_t)(1.84776*4096);
+	const int32_t M13 = (int32_t)(1.41421*256), M2 = (int32_t)(1.08239*256), M4 = (int32_t)(2.61313*256), M5 = (int32_t)(1.84776*256);
 	int32_t v0, v1, v2, v3, v4, v5, v6, v7;
 	int32_t t10, t11, t12, t13;
 	int32_t z3;
-	uint8_t i;
+	size_t i;
 
 	/* Process columns */
 	for (i = 8; i; i--) {
@@ -399,7 +396,7 @@ static void block_idct (
 		t12 = v0 - v2;
 		v1 = src[8 * 2];
 		z3 = src[8 * 6];
-		t11 = (v1 - z3) * M13 >> 12;
+		t11 = (v1 - z3) * M13 >> 8;
 		z3 += v1;
 		v0 = t10 + z3;
 		v3 = t10 - z3;
@@ -415,13 +412,13 @@ static void block_idct (
 		v7 = src[8 * 3];
 		t12 = v6 - v7;
 		v7 += v6;
-		v5 = (t11 - v7) * M13 >> 12;
+		v5 = (t11 - v7) * M13 >> 8;
 		v7 += t11;
 		src[8 * 0] = v0 + v7;	/* Write-back transformed values */
 		src[8 * 7] = v0 - v7;
-		t13 = (t10 + t12) * M5 >> 12;
-		v4 = t13 - (t10 * M2 >> 12);
-		v6 = t13 - (t12 * M4 >> 12) - v7;
+		t13 = (t10 + t12) * M5 >> 8;
+		v4 = t13 - (t10 * M2 >> 8);
+		v6 = t13 - (t12 * M4 >> 8) - v7;
 		src[8 * 1] = v1 + v6;
 		src[8 * 6] = v1 - v6;
 		v5 -= v6;
@@ -443,7 +440,7 @@ static void block_idct (
 		t12 = v0 - v2;
 		v1 = src[2];
 		z3 = src[6];
-		t11 = (v1 - z3) * M13 >> 12;
+		t11 = (v1 - z3) * M13 >> 8;
 		z3 += v1;
 		v0 = t10 + z3;
 		v3 = t10 - z3;
@@ -459,13 +456,13 @@ static void block_idct (
 		v7 = src[3];
 		t12 = v6 - v7;
 		v7 += v6;
-		v5 = (t11 - v7) * M13 >> 12;
+		v5 = (t11 - v7) * M13 >> 8;
 		v7 += t11;
 		dst[0] = BYTECLIP((v0 + v7) >> 8);	/* Descale the transformed values 8 bits and output */
 		dst[7] = BYTECLIP((v0 - v7) >> 8);
-		t13 = (t10 + t12) * M5 >> 12;
-		v4 = t13 - (t10 * M2 >> 12);
-		v6 = t13 - (t12 * M4 >> 12) - v7;
+		t13 = (t10 + t12) * M5 >> 8;
+		v4 = t13 - (t10 * M2 >> 8);
+		v6 = t13 - (t12 * M4 >> 8) - v7;
 		dst[1] = BYTECLIP((v1 + v6) >> 8);
 		dst[6] = BYTECLIP((v1 - v6) >> 8);
 		v5 -= v6;
@@ -493,19 +490,17 @@ static JRESULT mcu_load (
 	int32_t* tmp	/* Block working buffer for de-quantize and IDCT */
 )
 {
-	int16_t b, d, e;
-	uint8_t blk, nby, nbc, i, z, id, cmp;
+	int_fast16_t b, d, e;
+	uint_fast8_t blk, nby, nbc, i, z;
 	const uint8_t *hb, *hd;
 	const uint16_t *hc;
-	const int32_t *dqf;
-
 
 	nby = jd->msx * jd->msy;	/* Number of Y blocks (1, 2 or 4) */
 	nbc = 2;					/* Number of C blocks (2) */
 
 	for (blk = 0; blk < nby + nbc; blk++) {
-		cmp = (blk < nby) ? 0 : blk - nby + 1;	/* Component number 0:Y, 1:Cb, 2:Cr */
-		id = cmp ? 1 : 0;						/* Huffman table ID of the component */
+		size_t cmp = (blk < nby) ? 0 : blk - nby + 1;	/* Component number 0:Y, 1:Cb, 2:Cr */
+		size_t id = cmp ? 1 : 0;						/* Huffman table ID of the component */
 
 		/* Extract a DC element from input stream */
 		hb = jd->huffbits[id][0];				/* Huffman table for the DC element */
@@ -520,13 +515,13 @@ static JRESULT mcu_load (
 			b = 1 << (b - 1);					/* MSB position */
 			if (!(e & b)) e -= (b << 1) - 1;	/* Restore sign if needed */
 			d += e;								/* Get current value */
-			jd->dcv[cmp] = (int16_t)d;			/* Save current DC value for next block */
+			jd->dcv[cmp] = d;			/* Save current DC value for next block */
 		}
-		dqf = jd->qttbl[jd->qtid[cmp]];			/* De-quantizer table ID for this component */
+		const int32_t *dqf = jd->qttbl[jd->qtid[cmp]];			/* De-quantizer table ID for this component */
 		tmp[0] = d * dqf[0] >> 8;				/* De-quantize, apply scale factor of Arai algorithm and descale 8 bits */
 
 		/* Extract following 63 AC elements from input stream */
-		for (i = 1; i < 64; tmp[i++] = 0) ;		/* Clear rest of elements */
+		memset(&tmp[1], 0, 4 * 63);				/* Clear rest of elements */
 		hb = jd->huffbits[id][1];				/* Huffman table for the AC elements */
 		hc = jd->huffcode[id][1];
 		hd = jd->huffdata[id][1];
@@ -535,11 +530,7 @@ static JRESULT mcu_load (
 			b = huffext(jd, hb, hc, hd);		/* Extract a huffman coded value (zero runs and bit length) */
 			if (b == 0) break;					/* EOB? */
 			if (b < 0) return (JRESULT)(-b);	/* Err: invalid code or input error */
-			z = (uint16_t)b >> 4;				/* Number of leading zero elements */
-			if (z) {
-				i += z;							/* Skip zero elements */
-				if (i >= 64) return JDR_FMT1;	/* Too long zero run */
-			}
+			i += b >> 4;
 			if (b &= 0x0F) {					/* Bit length */
 				d = bitext(jd, b);				/* Extract data bits */
 				if (d < 0) return (JRESULT)(-d);/* Err: input device */
@@ -570,17 +561,16 @@ static JRESULT mcu_output (
 	uint8_t* mcubuf,
 	uint8_t* workbuf,
 	uint16_t (*outfunc)(TJpgD*, void*, JRECT*),	/* RGB output function */
-	uint16_t x,		/* MCU position in the image (left of the MCU) */
-	uint16_t y		/* MCU position in the image (top of the MCU) */
+	uint_fast16_t x,		/* MCU position in the image (left of the MCU) */
+	uint_fast16_t y		/* MCU position in the image (top of the MCU) */
 )
 {
 //	const int16_t CVACC = (sizeof (int16_t) > 2) ? 1024 : 128;
-	uint16_t ix, iy, mx, my, rx, ry;
-	int16_t yy, cb, cr;
+	uint_fast16_t ix, iy, mx, my, rx, ry;
+	int32_t yy, cb, cr;
 	uint8_t *py, *pc;
 	uint16_t *rgb16;
 	JRECT rect;
-
 
 	mx = jd->msx * 8; my = jd->msy * 8;					/* MCU size (pixel) */
 	rx = (x + mx <= jd->width) ? mx : jd->width - x;	/* Output rectangular size (it may be clipped at right/bottom end) */
@@ -591,37 +581,33 @@ static JRESULT mcu_output (
 
 	/* Build an RGB MCU from discrete comopnents */
 	rgb16 = (uint16_t*)workbuf;
-	uint8_t r,g,b;
+	uint_fast8_t r,g,b;
 	const int8_t* btbase = Bayer[jd->bayer];
 	const int8_t* btbl;
-	for (iy = 0; iy < ry; iy++) {
+	uint_fast8_t ixshift = (mx == 16);
+	uint_fast8_t iyshift = (my == 16);
+	iy = 0;
+	do {
 		btbl = btbase + ((iy & 3) << 2);
-		pc = mcubuf;
-		py = pc + iy * 8;
-		if (my == 16) {		/* Double block height? */
-			pc += 64 * 4 + (iy >> 1) * 8;
-			if (iy >= 8) py += 64;
-		} else {			/* Single block height */
-			pc += mx * 8 + iy * 8;
-		}
-		for (ix = 0; ix < rx; ix++) {
-			cb = pc[0] - 128; 	/* Get Cb/Cr component and restore right level */
-			cr = pc[64] - 128;
-			if (mx == 16) {					/* Double block width? */
-				if (ix == 8) py += 64 - 8;	/* Jump to next block if double block heigt */
-				pc += ix & 1;				/* Increase chroma pointer every two pixels */
-			} else {						/* Single block width */
-				pc++;						/* Increase chroma pointer every pixel */
-			}
-			yy = btbl[ix & 3] + *py++;			/* Get Y component */
+		py = &mcubuf[((iy & 8) + iy) << 3];
+		pc = &mcubuf[((mx << iyshift) + (iy >> iyshift)) << 3];
+		ix = 0;
+		do {
+			do {
+				yy = btbl[ix & 3] + py[ix];			/* Get Y component */
+				size_t idx = ix >> ixshift;
+				cb = (pc[idx] - 128); 	/* Get Cb/Cr component and restore right level */
+				cr = (pc[idx + 64] - 128);
 
-			/* Convert YCbCr to RGB */
-			r = BYTECLIP(yy + (((int16_t)(1.402 * 128) * cr) >> 7));
-			g = BYTECLIP(yy - (((int16_t)(0.344 * 128) * cb + (int16_t)(0.714 * 128) * cr) >> 7));
-			b = BYTECLIP(yy + (((int16_t)(1.772 * 128) * cb) >> 7));
-			*rgb16++ = dma565Color(r, g, b);
-		}
-	}
+				/* Convert YCbCr to RGB */
+				r = BYTECLIP(yy + (((int32_t)(1.402 * 256) * cr) >> 8));
+				g = BYTECLIP(yy - (((int32_t)(0.344 * 256) * cb + (int32_t)(0.714 * 256) * cr) >> 8));
+				b = BYTECLIP(yy + (((int32_t)(1.772 * 256) * cb) >> 8));
+				*rgb16++ = dma565Color(r, g, b);
+			} while (++ix & 7);
+			py += 64 - 8;	/* Jump to next block if double block heigt */
+		} while (ix != mx);
+	} while (++iy != my);
 
 	/* Output the RGB rectangular */
 	return outfunc(jd, workbuf, &rect) ? JDR_OK : JDR_INTR; 
@@ -639,7 +625,7 @@ static JRESULT restart (
 	uint16_t rstn	/* Expected restert sequense number */
 )
 {
-	uint16_t i, dc;
+	uint_fast16_t dc;
 	uint16_t d;
 	uint8_t *dp;
 
@@ -647,7 +633,7 @@ static JRESULT restart (
 	/* Discard padding bits and get two bytes from the input stream */
 	dp = jd->dptr; dc = jd->dctr;
 	d = 0;
-	for (i = 0; i < 2; i++) {
+	for (size_t i = 0; i < 2; i++) {
 		if (!dc) {	/* No input data is available, re-fill input buffer */
 			dp = jd->inbuf;
 			dc = jd->infunc(jd, dp, TJPGD_SZBUF);

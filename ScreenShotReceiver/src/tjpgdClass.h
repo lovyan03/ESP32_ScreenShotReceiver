@@ -12,7 +12,7 @@
 
 #define	TJPGD_SZBUF		1426	/* Size of stream input buffer */
 #define JD_FORMAT		0	/* Output pixel format 0:RGB888 (3 BYTE/pix), 1:RGB565 (1 WORD/pix) */
-#define JD_TBLCLIP		1	/* Use table for saturation (might be a bit faster but increases 1K bytes of code size) */
+#define JD_TBLCLIP		0	/* Use table for saturation (might be a bit faster but increases 1K bytes of code size) */
 
 /*---------------------------------------------------------------------------*/
 
@@ -48,22 +48,22 @@ typedef struct {
 /* Decompressor object structure */
 typedef struct TJpgD TJpgD;
 struct TJpgD {
-	uint16_t dctr;				/* Number of bytes available in the input buffer */
+	uint_fast16_t dctr;				/* Number of bytes available in the input buffer */
 	uint8_t* dptr;				/* Current data read ptr */
 	uint8_t* inbuf;				/* Bit stream input buffer */
-	uint8_t dmsk;				/* Current bit in the current read byte */
-	uint8_t bayer;				/* Output bayer gain */
-	uint8_t msx, msy;			/* MCU size in unit of block (width, height) */
+	uint_fast8_t dmsk;				/* Current bit in the current read byte */
+	uint_fast8_t bayer;				/* Output bayer gain */
+	uint_fast8_t msx, msy;			/* MCU size in unit of block (width, height) */
 	uint8_t qtid[3];			/* Quantization table ID of each component */
 	int16_t dcv[3];				/* Previous DC element of each component */
 	uint16_t nrst;				/* Restart inverval */
-	uint16_t width, height;		/* Size of the input image (pixel) */
+	uint_fast16_t width, height;		/* Size of the input image (pixel) */
 	uint8_t* huffbits[2][2];	/* Huffman bit distribution tables [id][dcac] */
 	uint16_t* huffcode[2][2];	/* Huffman code word tables [id][dcac] */
 	uint8_t* huffdata[2][2];	/* Huffman decoded data tables [id][dcac] */
 	int32_t* qttbl[4];			/* Dequantizer tables [id] */
 	void* pool;					/* Pointer to available memory pool */
-	uint16_t sz_pool;			/* Size of momory pool (bytes available) */
+	uint_fast16_t sz_pool;			/* Size of momory pool (bytes available) */
 	uint16_t (*infunc)(TJpgD*, uint8_t*, uint16_t);/* Pointer to jpeg stream input function */
 	void* device;				/* Pointer to I/O device identifiler for the session */
 
