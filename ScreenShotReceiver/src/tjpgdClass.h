@@ -48,16 +48,16 @@ typedef struct {
 /* Decompressor object structure */
 typedef struct TJpgD TJpgD;
 struct TJpgD {
-	uint_fast16_t dctr;				/* Number of bytes available in the input buffer */
+	uint_fast16_t dctr;			/* Number of bytes available in the input buffer */
 	uint8_t* dptr;				/* Current data read ptr */
 	uint8_t* inbuf;				/* Bit stream input buffer */
-	uint_fast8_t dmsk;				/* Current bit in the current read byte */
-	uint_fast8_t bayer;				/* Output bayer gain */
-	uint_fast8_t msx, msy;			/* MCU size in unit of block (width, height) */
+	uint_fast8_t dmsk;			/* Current bit in the current read byte */
+	uint_fast8_t bayer;			/* Output bayer gain */
+	uint_fast8_t msx, msy;		/* MCU size in unit of block (width, height) */
 	uint8_t qtid[3];			/* Quantization table ID of each component */
 	int16_t dcv[3];				/* Previous DC element of each component */
 	uint16_t nrst;				/* Restart inverval */
-	uint_fast16_t width, height;		/* Size of the input image (pixel) */
+	uint16_t width, height;		/* Size of the input image (pixel) */
 	uint8_t* huffbits[2][2];	/* Huffman bit distribution tables [id][dcac] */
 	uint16_t* huffcode[2][2];	/* Huffman code word tables [id][dcac] */
 	uint8_t* huffdata[2][2];	/* Huffman decoded data tables [id][dcac] */
