@@ -196,7 +196,7 @@ static int create_qt_tbl (	/* 0:OK, !0:Failed */
 		pb = (int32_t*)alloc_pool(jd, 64 * sizeof (int32_t));/* Allocate a memory block for the table */
 		if (!pb) return JDR_MEM1;				/* Err: not enough memory */
 		jd->qttbl[d & 3] = pb;						/* Register the table */
-		for (size_t i = 0; i < 64; i++) {				/* Load the table */
+		for (size_t i = 0; i < 64; ++i) {			/* Load the table */
 			z = ZIG(i);							/* Zigzag-order to raster-order conversion */
 			pb[z] = (int32_t)((uint32_t)data[i] * IPSF(z));	/* Apply scale factor of Arai algorithm to the de-quantizers */
 		}
@@ -270,40 +270,38 @@ static int16_t bitext (	/* >=0: extracted data, <0: error code */
 )
 {
 	uint8_t *dp;
-	uint_fast8_t msk, s, f;
+	uint_fast8_t msk, s;
 	uint_fast16_t dc, v;
 
 	msk = jd->dmsk; dc = jd->dctr; dp = jd->dptr;	/* Bit mask, number of data available, read ptr */
-	s = *dp; v = f = 0;
+	s = *dp; v = 0;
 	size_t shift;
 	do {
 		if (!msk) {				/* Next byte? */
+bitext_goto:
 			if (!dc) {			/* No input data is available, re-fill input buffer */
 				dp = jd->inbuf;	/* Top of input buffer */
 				dc = jd->infunc(jd, dp, TJPGD_SZBUF);
 				if (!dc) return 0 - (int16_t)JDR_INP;	/* Err: read error or wrong stream termination */
 			} else {
-				dp++;			/* Next data ptr */
+				++dp;			/* Next data ptr */
 			}
-			dc--;				/* Decrement number of available bytes */
-			if (!f) {			/* Not in flag sequence? */
+			--dc;				/* Decrement number of available bytes */
+			if (!msk) {			/* Not in flag sequence? */
+				msk = 8;		/* Read from MSB */
 				s = *dp;				/* Get next data byte */
 				if (s == 0xFF) {		/* Is start of flag sequence? */
-					f = 1;
-					shift = 0;
-					continue;	/* Enter flag sequence */
+					goto bitext_goto;	/* Enter flag sequence */
 				}
-			} else {
-				f = 0;			/* Exit flag sequence */
+			} else {			/* Exit flag sequence */
 				if (*dp != 0) return 0 - (int32_t)JDR_FMT1;	/* Err: unexpected flag is detected (may be collapted data) */
 				*dp = s = 0xFF;			/* The flag is a data 0xFF */
 			}
-
-			msk = 8;		/* Read from MSB */
 		}
 		shift = msk < nbit ? msk : nbit;
 		msk -= shift;
-		v = (v << shift) | ((s >> msk) & ((1 << shift) - 1));	/* Get a bit */
+		if (shift == 8)		v = (v << shift) | (s >> msk);
+		else v = (v << shift) | ((s >> msk) & ((1 << shift) - 1));	/* Get a bit */
 	} while (nbit -= shift);
 	jd->dmsk = msk; jd->dctr = dc; jd->dptr = dp;
 
@@ -324,37 +322,35 @@ static int16_t huffext (	/* >=0: decoded data, <0: error code */
 	const uint8_t* hdata	/* Pointer to the data table */
 )
 {
-	uint_fast8_t msk, s, f, bl, nd;
+	uint_fast8_t msk, s, bl, nd;
 	uint8_t *dp;
 	uint_fast16_t dc, v;
 
 
 	msk = jd->dmsk; dc = jd->dctr; dp = jd->dptr;	/* Bit mask, number of data available, read ptr */
-	s = *dp; v = f = 0;
+	s = *dp; v = 0;
 	bl = 16;	/* Max code length */
 	do {
 		if (!msk) {		/* Next byte? */
+huffext_goto:
 			if (!dc) {	/* No input data is available, re-fill input buffer */
 				dp = jd->inbuf;	/* Top of input buffer */
 				dc = jd->infunc(jd, dp, TJPGD_SZBUF);
 				if (!dc) return 0 - (int16_t)JDR_INP;	/* Err: read error or wrong stream termination */
 			} else {
-				dp++;	/* Next data ptr */
+				++dp;	/* Next data ptr */
 			}
-			dc--;		/* Decrement number of available bytes */
-			if (!f) {		/* Not in flag sequence? */
+			--dc;		/* Decrement number of available bytes */
+			if (!msk) {		/* Not in flag sequence? */
+				msk = 8;		/* Read from MSB */
 				s = *dp;				/* Get next data byte */
 				if (s == 0xFF) {		/* Is start of flag sequence? */
-					++bl;
-					f = 1;
-					continue;	/* Enter flag sequence, get trailing byte */
+					goto huffext_goto;	/* Enter flag sequence, get trailing byte */
 				}
-			} else {
-				f = 0;		/* Exit flag sequence */
+			} else {			/* Exit flag sequence */
 				if (*dp != 0) return 0 - (int32_t)JDR_FMT1;	/* Err: unexpected flag is detected (may be collapted data) */
 				*dp = s = 0xFF;			/* The flag is a data 0xFF */
 			}
-			msk = 8;		/* Read from MSB */
 		}
 		v = (v << 1) | ((s >> (--msk)) & 1);	/* Get a bit */
 
@@ -385,94 +381,104 @@ static void block_idct (
 	const int32_t M13 = (int32_t)(1.41421*256), M2 = (int32_t)(1.08239*256), M4 = (int32_t)(2.61313*256), M5 = (int32_t)(1.84776*256);
 	int32_t v0, v1, v2, v3, v4, v5, v6, v7;
 	int32_t t10, t11, t12, t13;
-	int32_t z3;
-	size_t i;
 
 	/* Process columns */
-	for (i = 8; i; i--) {
-		v0 = src[8 * 0];	/* Get even elements */
-		v2 = src[8 * 4];
-		t10 = v0 + v2;		/* Process the even elements */
-		t12 = v0 - v2;
-		v1 = src[8 * 2];
-		z3 = src[8 * 6];
-		t11 = (v1 - z3) * M13 >> 8;
-		z3 += v1;
-		v0 = t10 + z3;
-		v3 = t10 - z3;
-		t11 -= z3;
-		v1 = t11 + t12;
-		v2 = t12 - t11;
-
-		v4 = src[8 * 7];	/* Get odd elements */
+	for (size_t i = 0; i < 8; ++i) {
+		/* Get and Process the odd elements */
+		v4 = src[8 * 7];
 		v5 = src[8 * 1];
-		t10 = v5 - v4;		/* Process the odd elements */
-		t11 = v5 + v4;
 		v6 = src[8 * 5];
 		v7 = src[8 * 3];
+
+		t10 = v5 - v4;
+		t11 = v5 + v4;
 		t12 = v6 - v7;
 		v7 += v6;
 		v5 = (t11 - v7) * M13 >> 8;
 		v7 += t11;
-		src[8 * 0] = v0 + v7;	/* Write-back transformed values */
-		src[8 * 7] = v0 - v7;
 		t13 = (t10 + t12) * M5 >> 8;
-		v4 = t13 - (t10 * M2 >> 8);
-		v6 = t13 - (t12 * M4 >> 8) - v7;
+		v6 = t13 - ((t12 * M4 >> 8) + v7);
+		v5 -= v6;
+		v4 = t13 - ((t10 * M2 >> 8) + v5);
+
+		/* Get and Process the even elements */
+		v0 = src[8 * 0];
+		v2 = src[8 * 4];
+		t10 = v0 + v2;
+		t12 = v0 - v2;
+
+		v1 = src[8 * 2];
+		v3 = src[8 * 6];
+		t11 = (v1 - v3) * M13 >> 8;
+		v3 += v1;
+		t11 -= v3;
+
+		v0 = t10 + v3;
+		v3 = t10 - v3;
+		v1 = t12 + t11;
+		v2 = t12 - t11;
+
+		/* Write-back transformed values */
+		src[8 * 0] = v0 + v7;
+		src[8 * 7] = v0 - v7;
 		src[8 * 1] = v1 + v6;
 		src[8 * 6] = v1 - v6;
-		v5 -= v6;
 		src[8 * 2] = v2 + v5;
 		src[8 * 5] = v2 - v5;
-		v4 -= v5;
 		src[8 * 3] = v3 + v4;
 		src[8 * 4] = v3 - v4;
 
-		src++;	/* Next column */
+		++src;	/* Next column */
 	}
 
 	/* Process rows */
 	src -= 8;
-	for (i = 8; i; i--) {
-		v0 = src[0] + (128L << 8);	/* Get even elements (remove DC offset (-128) here) */
-		v2 = src[4];
-		t10 = v0 + v2;				/* Process the even elements */
-		t12 = v0 - v2;
-		v1 = src[2];
-		z3 = src[6];
-		t11 = (v1 - z3) * M13 >> 8;
-		z3 += v1;
-		v0 = t10 + z3;
-		v3 = t10 - z3;
-		t11 -= z3;
-		v1 = t11 + t12;
-		v2 = t12 - t11;
-
-		v4 = src[7];				/* Get odd elements */
+	for (size_t i = 0; i < 8; ++i) {
+		/* Get and Process the odd elements */
+		v4 = src[7];
 		v5 = src[1];
-		t10 = v5 - v4;				/* Process the odd elements */
-		t11 = v5 + v4;
 		v6 = src[5];
 		v7 = src[3];
+		t10 = v5 - v4;
+		t11 = v5 + v4;
 		t12 = v6 - v7;
 		v7 += v6;
 		v5 = (t11 - v7) * M13 >> 8;
 		v7 += t11;
-		dst[0] = BYTECLIP((v0 + v7) >> 8);	/* Descale the transformed values 8 bits and output */
-		dst[7] = BYTECLIP((v0 - v7) >> 8);
 		t13 = (t10 + t12) * M5 >> 8;
-		v4 = t13 - (t10 * M2 >> 8);
 		v6 = t13 - (t12 * M4 >> 8) - v7;
+		v4 = t13 - (t10 * M2 >> 8);
+		v5 -= v6;
+		v4 -= v5;
+
+		/* Get and Process the even elements */
+		v0 = src[0] + (128L << 8);	/* remove DC offset (-128) here */
+		v2 = src[4];
+		t10 = v0 + v2;
+		t12 = v0 - v2;
+
+		v1 = src[2];
+		v3 = src[6];
+		t11 = (v1 - v3) * M13 >> 8;
+		v3 += v1;
+		t11 -= v3;
+
+		v0 = t10 + v3;
+		v3 = t10 - v3;
+		v1 = t12 + t11;
+		v2 = t12 - t11;
+
+		/* Descale the transformed values 8 bits and output */
+		dst[0] = BYTECLIP((v0 + v7) >> 8);
+		dst[7] = BYTECLIP((v0 - v7) >> 8);
 		dst[1] = BYTECLIP((v1 + v6) >> 8);
 		dst[6] = BYTECLIP((v1 - v6) >> 8);
-		v5 -= v6;
 		dst[2] = BYTECLIP((v2 + v5) >> 8);
 		dst[5] = BYTECLIP((v2 - v5) >> 8);
-		v4 -= v5;
 		dst[3] = BYTECLIP((v3 + v4) >> 8);
 		dst[4] = BYTECLIP((v3 - v4) >> 8);
-		dst += 8;
 
+		dst += 8;
 		src += 8;	/* Next row */
 	}
 }
@@ -696,15 +702,6 @@ JRESULT TJpgD::prepare (
 	this->infunc = infunc;	/* Stream input function */
 	this->device = dev;		/* I/O device identifier */
 	this->nrst = 0;			/* No restart interval (default) */
-
-	for (i = 0; i < 2; i++) {	/* Nulls pointers */
-		for (j = 0; j < 2; j++) {
-			huffbits[i][j] = 0;
-			huffcode[i][j] = 0;
-			huffdata[i][j] = 0;
-		}
-	}
-	for (i = 0; i < 4; qttbl[i++] = 0) ;
 
 	inbuf = seg = dptr = (uint8_t*)alloc_pool(this, TJPGD_SZBUF);		/* Allocate stream input buffer */
 	if (!seg) return JDR_MEM1;

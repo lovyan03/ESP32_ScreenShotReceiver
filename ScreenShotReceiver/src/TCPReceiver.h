@@ -253,15 +253,15 @@ private:
       return false;
     }
     _out_width = std::min(_jdec.width, _tft_width);
-    _jpg_x = (_tft_width - _jdec.width) / 2;
-    _out_height = std::min(_jdec.height, _tft_height);
-    _jpg_y = (_tft_height- _jdec.height) / 2;
+    _jpg_x = (_tft_width - _jdec.width) >> 1;
     if (0 > _jpg_x) {
       _off_x = - _jpg_x;
       _jpg_x = 0;
     } else {
       _off_x = 0;
     }
+    _out_height = std::min(_jdec.height, _tft_height);
+    _jpg_y = (_tft_height- _jdec.height) >> 1;
     if (0 > _jpg_y) {
       _off_y = - _jpg_y;
       _jpg_y = 0;
