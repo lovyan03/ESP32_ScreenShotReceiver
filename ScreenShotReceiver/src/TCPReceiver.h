@@ -179,29 +179,29 @@ private:
   static uint16_t jpgWrite(TJpgD *jdec, void *bitmap, JRECT *rect) {
     TCPReceiver* me = (TCPReceiver*)jdec->device;
     uint16_t *dst = DMADrawer::getNextBuffer();
-    uint16_t x = rect->left;
-    uint16_t y = rect->top;
-    uint16_t w = rect->right + 1 - x;
-    uint16_t h = rect->bottom + 1 - y;
-    uint16_t outWidth = me->_out_width;
-    uint16_t outHeight = me->_out_height;
+    uint_fast16_t x = rect->left;
+    uint_fast16_t y = rect->top;
+    uint_fast16_t w = rect->right + 1 - x;
+    uint_fast16_t h = rect->bottom + 1 - y;
+    uint_fast16_t outWidth = me->_out_width;
+    uint_fast16_t outHeight = me->_out_height;
     uint16_t *data = (uint16_t*)bitmap;
-    uint16_t oL = 0, oR = 0;
+    uint_fast16_t oL = 0, oR = 0;
 
     if (rect->right < me->_off_x)      return 1;
     if (x >= (me->_off_x + outWidth))  return 1;
     if (rect->bottom < me->_off_y)     return 1;
     if (y >= (me->_off_y + outHeight)) return 1;
 
-    uint16_t tmpy = y % ((1 + me->_rowskip) * jdec->msy << 3);
+    uint_fast16_t tmpy = y % ((1 + me->_rowskip) * jdec->msy << 3);
     if (me->_off_y > y) {
-      uint16_t linesToSkip = me->_off_y - y;
+      uint_fast16_t linesToSkip = me->_off_y - y;
       data += linesToSkip * w;
       h -= linesToSkip;
       dst -= tmpy * outWidth;
     } else 
     if (me->_off_y > (y - tmpy)) {
-      uint16_t linesToSkip = me->_off_y - (y - tmpy);
+      uint_fast16_t linesToSkip = me->_off_y - (y - tmpy);
       dst -= linesToSkip * outWidth;
     }
 
@@ -212,19 +212,14 @@ private:
       oR = (rect->right + 1) - (me->_off_x + outWidth);
     }
 
-    int16_t line;
-
-    dst += x - me->_off_x + outWidth * tmpy;
-    while (h--) {
-      data += oL;
-      dst += oL;
-      line = w - ( oL + oR );
-      while (line--) {
-        *dst++ = *data++;
-      }
-      dst += outWidth - w + oR;
-      data += oR;
-    }
+    int_fast16_t line = (w - ( oL + oR )) << 1;
+    dst += oL + x - me->_off_x + outWidth * tmpy;
+    data += oL;
+    do {
+      memcpy(dst, data, line);
+      dst += outWidth;
+      data += w;
+    } while (--h);
 
     return 1;
   }

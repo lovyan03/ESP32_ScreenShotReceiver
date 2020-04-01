@@ -600,15 +600,23 @@ static JRESULT mcu_output (
 				cr = (pc[idx + 64] - 128);
 
 				/* Convert YCbCr to RGB */
-				r = BYTECLIP(yy + (((int32_t)(1.402 * 256) * cr) >> 8));
-				g = BYTECLIP(yy - (((int32_t)(0.344 * 256) * cb + (int32_t)(0.714 * 256) * cr) >> 8));
-				b = BYTECLIP(yy + (((int32_t)(1.772 * 256) * cb) >> 8));
+				r = BYTECLIP(yy + (((int32_t)(1.402   * 256) * cr) >> 8));
+				g = BYTECLIP(yy - (((int32_t)(0.34414 * 256) * cb
+								  + (int32_t)(0.71414 * 256) * cr) >> 8));
+				b = BYTECLIP(yy + (((int32_t)(1.772   * 256) * cb) >> 8));
 				*rgb16++ = dma565Color(r, g, b);
 			} while (++ix & 7);
 			py += 64 - 8;	/* Jump to next block if double block heigt */
 		} while (ix != mx);
 	} while (++iy != my);
 
+	if (rx < mx) {
+		uint16_t *s, *d;
+		s = d = (uint16_t*)workbuf;
+		for (size_t y = 1; y < ry; ++y) {
+			memcpy(d += rx, s += mx, rx << 1);	/* Copy effective pixels */
+		}
+	}
 	/* Output the RGB rectangular */
 	return outfunc(jd, workbuf, &rect) ? JDR_OK : JDR_INTR; 
 }
