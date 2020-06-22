@@ -3,30 +3,30 @@
 
 #pragma GCC optimize ("O3")
 
+#include <LovyanGFX.hpp>  // https://github.com/lovyan03/LovyanGFX/
 #include <WiFi.h>
 #include <WiFiServer.h>
-#include <driver/spi_master.h>
+#include <esp_heap_caps.h>
 #include "tjpgdClass.h"
-#include "DMADrawer.h"
 
 #undef min
 
 class TCPReceiver
 {
 public:
-  bool setup(uint16_t offset_x, uint16_t offset_y, uint16_t width, uint16_t height, uint32_t spi_freq, int spi_mosi, int spi_miso, int spi_sclk, int tft_cs, int tft_dc)
+  bool setup(LGFX* lcd)
   {
+    _lcd = lcd;
+    _lcd->startWrite();
     Serial.println("TCPReceiver setup.");
 
-    _tft_offset_x = offset_x;
-    _tft_offset_y = offset_y;
-    _tft_width = width;
-    _tft_height = height;
+    _tft_width = lcd->width();
+    _tft_height = lcd->height();
+
+    for (int i = 0; i < 2; ++i) _dmabuf[i] = (uint16_t*)heap_caps_malloc(_tft_width * 48 * 2, MALLOC_CAP_DMA);
 
     _tcp.setNoDelay(true);
     _tcp.begin(63333);
-
-    DMADrawer::setup(DMA_BUF_LEN, spi_freq, spi_mosi, spi_miso, spi_sclk, tft_cs, tft_dc);
 
     _jdec.multitask_begin();
 
@@ -36,7 +36,7 @@ public:
 
   bool loop()
   {
-    static uint16_t waitCount = 0;
+    static uint32_t waitCount = 0;
 
     if (SENDER_PREFIX_SIZE <= _client.available()
      && SENDER_PREFIX_SIZE == _client.read(_tcpBuf, SENDER_PREFIX_SIZE)) {
@@ -44,7 +44,7 @@ public:
       if (_tcpBuf[0] == 'J'
        && _tcpBuf[1] == 'P'
        && _tcpBuf[2] == 'G') {
-        _recv_remain = *(int32_t*)&_tcpBuf[3];
+        _recv_remain = _tcpBuf[3] | _tcpBuf[4] << 8 | _tcpBuf[5] << 16 | _tcpBuf[6] << 24;
         if (_recv_remain > 600) {
           if (drawJpg()) {
             ++_drawCount;
@@ -55,7 +55,7 @@ public:
         if (0 < _recv_remain) {
           Serial.printf("clear remain data:%d\r\n", _recv_remain);
           int r;
-          for (uint16_t retry = 1000; retry; --retry) {
+          for (uint32_t retry = 1000; retry; --retry) {
             r = _client.read(_tcpBuf, _recv_remain < TCP_BUF_LEN ? _recv_remain : TCP_BUF_LEN);
             if (r > 0) {
               _recv_remain -= r;
@@ -104,37 +104,36 @@ public:
     return true;
   }
 private:
-  enum
-  { DMA_BUF_LEN = 320 * 48 * 2 // 320x48 16bit color
-  , TCP_BUF_LEN = 512
-  , SENDER_PREFIX_SIZE = 7
-  };
+  static constexpr int TCP_BUF_LEN = 512;
+  static constexpr int SENDER_PREFIX_SIZE = 7;
+
+  LGFX* _lcd;
+  uint16_t* _dmabuf[2];
+  bool _flip;
 
   WiFiServer _tcp;
   WiFiClient _client;
   TJpgD _jdec;
   int32_t _recv_remain = 0;
   uint32_t _sec = 0;
-  uint16_t _tft_offset_x;
-  uint16_t _tft_offset_y;
-  uint16_t _tft_width;
-  uint16_t _tft_height;
-  uint16_t _out_width;
-  uint16_t _out_height;
-  int16_t _off_x;
-  int16_t _off_y;
-  int16_t _jpg_x;
-  int16_t _jpg_y;
-  uint16_t _drawCount = 0;
-  uint16_t _delayCount = 0;
-  uint8_t _rowskip = 2;
+  int32_t _tft_width;
+  int32_t _tft_height;
+  int32_t _out_width;
+  int32_t _out_height;
+  int32_t _off_x;
+  int32_t _off_y;
+  int32_t _jpg_x;
+  int32_t _jpg_y;
+  uint32_t _drawCount = 0;
+  uint32_t _delayCount = 0;
+  uint32_t _rowskip = 2;
   uint8_t _tcpBuf[TCP_BUF_LEN];
   bool _recv_requested = false;
 
-  static uint16_t jpgRead(TJpgD *jdec, uint8_t *buf, uint16_t len) {
+  static uint32_t jpgRead(TJpgD *jdec, uint8_t *buf, uint32_t len) {
     TCPReceiver* me = (TCPReceiver*)jdec->device;
     WiFiClient* client = &me->_client;
-    uint16_t retry;
+    uint32_t retry;
 
     if (len == TJPGD_SZBUF) {
       if (me->_recv_requested) {
@@ -176,9 +175,11 @@ private:
     return l;
   }
 
-  static uint16_t jpgWrite(TJpgD *jdec, void *bitmap, JRECT *rect) {
+  static uint32_t jpgWrite(TJpgD *jdec, void *bitmap, TJpgD::JRECT *rect) {
     TCPReceiver* me = (TCPReceiver*)jdec->device;
-    uint16_t *dst = DMADrawer::getNextBuffer();
+
+    auto dst = me->_dmabuf[me->_flip];
+
     uint_fast16_t x = rect->left;
     uint_fast16_t y = rect->top;
     uint_fast16_t w = rect->right + 1 - x;
@@ -224,8 +225,11 @@ private:
     return 1;
   }
 
-  static uint16_t jpgWriteRow(TJpgD *jdec, uint16_t y, uint8_t h) {
+  static uint32_t jpgWriteRow(TJpgD *jdec, uint32_t y, uint32_t h) {
     TCPReceiver* me = (TCPReceiver*)jdec->device;
+
+    if (y == 0)
+      me->_lcd->setAddrWindow(me->_jpg_x, me->_jpg_y, me->_out_width, me->_out_height);
 
     int16_t outY = y - me->_off_y;
     if (outY < 0) {
@@ -238,21 +242,19 @@ private:
       h = me->_tft_height - (me->_jpg_y + outY);
     }
 
-    DMADrawer::draw( me->_tft_offset_x + me->_jpg_x
-                   , me->_tft_offset_y + me->_jpg_y + outY
-                   , me->_out_width
-                   , h
-                   );
+    me->_lcd->pushPixelsDMA(me->_dmabuf[me->_flip], me->_out_width * h * 2);
+
+    me->_flip = !me->_flip;
     return 1;
   }
 
   bool drawJpg() {
-    JRESULT jres = _jdec.prepare(jpgRead, this);
-    if (jres != JDR_OK) {
+    TJpgD::JRESULT jres = _jdec.prepare(jpgRead, this);
+    if (jres != TJpgD::JDR_OK) {
       Serial.printf("prepare failed! %d\r\n", jres);
       return false;
     }
-    _out_width = std::min(_jdec.width, _tft_width);
+    _out_width = std::min<int32_t>(_jdec.width, _tft_width);
     _jpg_x = (_tft_width - _jdec.width) >> 1;
     if (0 > _jpg_x) {
       _off_x = - _jpg_x;
@@ -260,7 +262,7 @@ private:
     } else {
       _off_x = 0;
     }
-    _out_height = std::min(_jdec.height, _tft_height);
+    _out_height = std::min<int32_t>(_jdec.height, _tft_height);
     _jpg_y = (_tft_height- _jdec.height) >> 1;
     if (0 > _jpg_y) {
       _off_y = - _jpg_y;
@@ -270,10 +272,11 @@ private:
     }
 
     jres = _jdec.decomp_multitask(jpgWrite, jpgWriteRow, _rowskip);
-    if (jres != JDR_OK) {
+    if (jres != TJpgD::JDR_OK) {
       Serial.printf("decomp failed! %d\r\n", jres);
       return false;
     }
+
     return true;
   }
 };

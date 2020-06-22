@@ -192,9 +192,9 @@ static int create_qt_tbl (	/* 0:OK, !0:Failed */
 
 	do {	/* Process all tables in the segment */
 		d = *data++;							/* Get table property */
-		if (d & 0xF0) return JDR_FMT1;			/* Err: not 8-bit resolution */
+		if (d & 0xF0) return TJpgD::JDR_FMT1;			/* Err: not 8-bit resolution */
 		pb = (int32_t*)alloc_pool(jd, 64 * sizeof (int32_t));/* Allocate a memory block for the table */
-		if (!pb) return JDR_MEM1;				/* Err: not enough memory */
+		if (!pb) return TJpgD::JDR_MEM1;				/* Err: not enough memory */
 		jd->qttbl[d & 3] = pb;						/* Register the table */
 		for (size_t i = 0; i < 64; ++i) {			/* Load the table */
 			z = ZIG(i);							/* Zigzag-order to raster-order conversion */
@@ -203,7 +203,7 @@ static int create_qt_tbl (	/* 0:OK, !0:Failed */
 		data += 64;
 	} while (ndata -= 65);
 
-	return JDR_OK;
+	return TJpgD::JDR_OK;
 }
 
 
@@ -226,10 +226,10 @@ static int create_huffman_tbl (	/* 0:OK, !0:Failed */
 
 	do {	/* Process all tables in the segment */
 		d = *data++;						/* Get table number and class */
-		if (d & 0xEE) return JDR_FMT1;		/* Err: invalid class/number */
+		if (d & 0xEE) return TJpgD::JDR_FMT1;		/* Err: invalid class/number */
 		cls = d >> 4; num = d & 0x0F;		/* class = dc(0)/ac(1), table number = 0/1 */
 		pb = (uint8_t*)alloc_pool(jd, 16);			/* Allocate a memory block for the bit distribution table */
-		if (!pb) return JDR_MEM1;			/* Err: not enough memory */
+		if (!pb) return TJpgD::JDR_MEM1;			/* Err: not enough memory */
 		jd->huffbits[num][cls] = pb - 1;
 		np = 0;
 		for (size_t i = 0; i < 16; ++i) {		/* Load number of patterns for 1 to 16-bit code */
@@ -237,7 +237,7 @@ static int create_huffman_tbl (	/* 0:OK, !0:Failed */
 		}
 
 		ph = (uint16_t*)alloc_pool(jd, (uint16_t)(np * sizeof (uint16_t)));/* Allocate a memory block for the code word table */
-		if (!ph) return JDR_MEM1;			/* Err: not enough memory */
+		if (!ph) return TJpgD::JDR_MEM1;			/* Err: not enough memory */
 		jd->huffcode[num][cls] = ph - 1;
 		hc = 0;
 		for (size_t i = 0; i < 16; ++i) {		/* Re-build huffman code word table */
@@ -247,14 +247,14 @@ static int create_huffman_tbl (	/* 0:OK, !0:Failed */
 		}
 
 		pd = (uint8_t*)alloc_pool(jd, np);			/* Allocate a memory block for the decoded data */
-		if (!pd) return JDR_MEM1;			/* Err: not enough memory */
+		if (!pd) return TJpgD::JDR_MEM1;			/* Err: not enough memory */
 		jd->huffdata[num][cls] = pd - 1;
 
 		memcpy(pd, data += 16, np);		/* Load decoded data corresponds to each code ward */
 		data += np;
 	} while (ndata -= 17 + np);
 
-	return JDR_OK;
+	return TJpgD::JDR_OK;
 }
 
 
@@ -282,7 +282,7 @@ bitext_goto:
 			if (!dc) {			/* No input data is available, re-fill input buffer */
 				dp = jd->inbuf;	/* Top of input buffer */
 				dc = jd->infunc(jd, dp, TJPGD_SZBUF);
-				if (!dc) return 0 - (int16_t)JDR_INP;	/* Err: read error or wrong stream termination */
+				if (!dc) return 0 - (int16_t)TJpgD::JDR_INP;	/* Err: read error or wrong stream termination */
 			} else {
 				++dp;			/* Next data ptr */
 			}
@@ -294,7 +294,7 @@ bitext_goto:
 					goto bitext_goto;	/* Enter flag sequence */
 				}
 			} else {			/* Exit flag sequence */
-				if (*dp != 0) return 0 - (int32_t)JDR_FMT1;	/* Err: unexpected flag is detected (may be collapted data) */
+				if (*dp != 0) return 0 - (int32_t)TJpgD::JDR_FMT1;	/* Err: unexpected flag is detected (may be collapted data) */
 				*dp = s = 0xFF;			/* The flag is a data 0xFF */
 			}
 		}
@@ -336,7 +336,7 @@ huffext_goto:
 			if (!dc) {	/* No input data is available, re-fill input buffer */
 				dp = jd->inbuf;	/* Top of input buffer */
 				dc = jd->infunc(jd, dp, TJPGD_SZBUF);
-				if (!dc) return 0 - (int16_t)JDR_INP;	/* Err: read error or wrong stream termination */
+				if (!dc) return 0 - (int16_t)TJpgD::JDR_INP;	/* Err: read error or wrong stream termination */
 			} else {
 				++dp;	/* Next data ptr */
 			}
@@ -348,7 +348,7 @@ huffext_goto:
 					goto huffext_goto;	/* Enter flag sequence, get trailing byte */
 				}
 			} else {			/* Exit flag sequence */
-				if (*dp != 0) return 0 - (int32_t)JDR_FMT1;	/* Err: unexpected flag is detected (may be collapted data) */
+				if (*dp != 0) return 0 - (int32_t)TJpgD::JDR_FMT1;	/* Err: unexpected flag is detected (may be collapted data) */
 				*dp = s = 0xFF;			/* The flag is a data 0xFF */
 			}
 		}
@@ -363,7 +363,7 @@ huffext_goto:
 		}
 	} while (--bl);
 
-	return 0 - (int16_t)JDR_FMT1;	/* Err: code not found (may be collapted data) */
+	return 0 - (int16_t)TJpgD::JDR_FMT1;	/* Err: code not found (may be collapted data) */
 }
 
 
@@ -490,7 +490,7 @@ static void block_idct (
 /* Load all blocks in the MCU into working buffer                        */
 /*-----------------------------------------------------------------------*/
 
-static JRESULT mcu_load (
+static TJpgD::JRESULT mcu_load (
 	TJpgD* jd,		/* Pointer to the decompressor object */
 	uint8_t* bp,		/* mcubuf */
 	int32_t* tmp	/* Block working buffer for de-quantize and IDCT */
@@ -513,11 +513,11 @@ static JRESULT mcu_load (
 		hc = jd->huffcode[id][0];
 		hd = jd->huffdata[id][0];
 		b = huffext(jd, hb, hc, hd);			/* Extract a huffman coded data (bit length) */
-		if (b < 0) return (JRESULT)(-b);		/* Err: invalid code or input */
+		if (b < 0) return (TJpgD::JRESULT)(-b);		/* Err: invalid code or input */
 		d = jd->dcv[cmp];						/* DC value of previous block */
 		if (b) {								/* If there is any difference from previous block */
 			e = bitext(jd, b);					/* Extract data bits */
-			if (e < 0) return (JRESULT)(-e);	/* Err: input */
+			if (e < 0) return (TJpgD::JRESULT)(-e);	/* Err: input */
 			b = 1 << (b - 1);					/* MSB position */
 			if (!(e & b)) e -= (b << 1) - 1;	/* Restore sign if needed */
 			d += e;								/* Get current value */
@@ -535,11 +535,11 @@ static JRESULT mcu_load (
 		do {
 			b = huffext(jd, hb, hc, hd);		/* Extract a huffman coded value (zero runs and bit length) */
 			if (b == 0) break;					/* EOB? */
-			if (b < 0) return (JRESULT)(-b);	/* Err: invalid code or input error */
+			if (b < 0) return (TJpgD::JRESULT)(-b);	/* Err: invalid code or input error */
 			i += b >> 4;
 			if (b &= 0x0F) {					/* Bit length */
 				d = bitext(jd, b);				/* Extract data bits */
-				if (d < 0) return (JRESULT)(-d);/* Err: input device */
+				if (d < 0) return (TJpgD::JRESULT)(-d);/* Err: input device */
 				b = 1 << (b - 1);				/* MSB position */
 				if (!(d & b)) d -= (b << 1) - 1;/* Restore negative value if needed */
 				z = ZIG(i);						/* Zigzag-order to raster-order converted index */
@@ -552,7 +552,7 @@ static JRESULT mcu_load (
 		bp += 64;				/* Next block */
 	}
 
-	return JDR_OK;	/* All blocks have been loaded successfully */
+	return TJpgD::JDR_OK;	/* All blocks have been loaded successfully */
 }
 
 
@@ -562,11 +562,11 @@ static JRESULT mcu_load (
 /* Output an MCU: Convert YCrCb to RGB and output it in RGB form         */
 /*-----------------------------------------------------------------------*/
 
-static JRESULT mcu_output (
+static TJpgD::JRESULT mcu_output (
 	TJpgD* jd,		/* Pointer to the decompressor object */
 	uint8_t* mcubuf,
 	uint8_t* workbuf,
-	uint16_t (*outfunc)(TJpgD*, void*, JRECT*),	/* RGB output function */
+	uint32_t (*outfunc)(TJpgD*, void*, TJpgD::JRECT*),	/* RGB output function */
 	uint_fast16_t x,		/* MCU position in the image (left of the MCU) */
 	uint_fast16_t y		/* MCU position in the image (top of the MCU) */
 )
@@ -576,7 +576,7 @@ static JRESULT mcu_output (
 	int32_t yy, cb, cr;
 	uint8_t *py, *pc;
 	uint16_t *rgb16;
-	JRECT rect;
+	TJpgD::JRECT rect;
 
 	mx = jd->msx * 8; my = jd->msy * 8;					/* MCU size (pixel) */
 	rx = (x + mx <= jd->width) ? mx : jd->width - x;	/* Output rectangular size (it may be clipped at right/bottom end) */
@@ -624,7 +624,7 @@ static JRESULT mcu_output (
 		}
 	}
 	/* Output the RGB rectangular */
-	return outfunc(jd, workbuf, &rect) ? JDR_OK : JDR_INTR; 
+	return outfunc(jd, workbuf, &rect) ? TJpgD::JDR_OK : TJpgD::JDR_INTR; 
 }
 
 
@@ -634,7 +634,7 @@ static JRESULT mcu_output (
 /* Process restart interval                                              */
 /*-----------------------------------------------------------------------*/
 
-static JRESULT restart (
+static TJpgD::JRESULT restart (
 	TJpgD* jd,		/* Pointer to the decompressor object */
 	uint16_t rstn	/* Expected restert sequense number */
 )
@@ -651,7 +651,7 @@ static JRESULT restart (
 		if (!dc) {	/* No input data is available, re-fill input buffer */
 			dp = jd->inbuf;
 			dc = jd->infunc(jd, dp, TJPGD_SZBUF);
-			if (!dc) return JDR_INP;
+			if (!dc) return TJpgD::JDR_INP;
 		} else {
 			dp++;
 		}
@@ -662,13 +662,13 @@ static JRESULT restart (
 
 	/* Check the marker */
 	if ((d & 0xFFD8) != 0xFFD0 || (d & 7) != (rstn & 7)) {
-		return JDR_FMT1;	/* Err: expected RSTn marker is not detected (may be collapted data) */
+		return TJpgD::JDR_FMT1;	/* Err: expected RSTn marker is not detected (may be collapted data) */
 	}
 
 	/* Reset DC offset */
 	jd->dcv[2] = jd->dcv[1] = jd->dcv[0] = 0;
 
-	return JDR_OK;
+	return TJpgD::JDR_OK;
 }
 
 
@@ -681,21 +681,21 @@ static JRESULT restart (
 #define	LDB_WORD(ptr)		(uint16_t)(((uint16_t)*((uint8_t*)(ptr))<<8)|(uint16_t)*(uint8_t*)((ptr)+1))
 
 
-JRESULT TJpgD::prepare (
-	uint16_t (*infunc)(TJpgD*, uint8_t*, uint16_t),	/* JPEG strem input function */
+TJpgD::JRESULT TJpgD::prepare (
+	uint32_t (*infunc)(TJpgD*, uint8_t*, uint32_t),	/* JPEG strem input function */
 	void* dev			/* I/O device identifier for the session */
 )
 {
 	uint8_t *seg, b;
 	uint8_t marker;
 	uint16_t i, j, len;
-	JRESULT rc;
+	TJpgD::JRESULT rc;
 
 	const uint16_t sz_pool = 3100;
 	static uint8_t pool[sz_pool];
 
 
-	if (!pool) return JDR_PAR;
+	if (!pool) return TJpgD::JDR_PAR;
 
 	this->pool = pool;		/* Work memroy */
 	this->sz_pool = sz_pool;	/* Size of given work memory */
@@ -704,36 +704,36 @@ JRESULT TJpgD::prepare (
 	this->nrst = 0;			/* No restart interval (default) */
 
 	inbuf = seg = dptr = (uint8_t*)alloc_pool(this, TJPGD_SZBUF);		/* Allocate stream input buffer */
-	if (!seg) return JDR_MEM1;
+	if (!seg) return TJpgD::JDR_MEM1;
 
 	dctr = infunc(this, dptr, TJPGD_SZBUF);
 	seg = dptr;
-	if (dctr <= 2) return JDR_INP;/* Check SOI marker */
-	if (LDB_WORD(seg) != 0xFFD8) return JDR_FMT1;	/* Err: SOI is not detected */
+	if (dctr <= 2) return TJpgD::JDR_INP;/* Check SOI marker */
+	if (LDB_WORD(seg) != 0xFFD8) return TJpgD::JDR_FMT1;	/* Err: SOI is not detected */
 	dptr += 2; dctr -= 2;
 
 	for (;;) {
 		/* Get a JPEG marker */
 		if (dctr < 4) {
-			if (4 > (TJPGD_SZBUF - (dptr - inbuf))) return JDR_MEM2;
+			if (4 > (TJPGD_SZBUF - (dptr - inbuf))) return TJpgD::JDR_MEM2;
 			dctr += infunc(this, dptr + dctr, 4);
-			if (dctr < 4) return JDR_INP;
+			if (dctr < 4) return TJpgD::JDR_INP;
 		}
 		seg = dptr;
 		dptr += 4;
 		dctr -= 4;
 
-		if (*seg++ != 0xFF) return JDR_FMT1;
+		if (*seg++ != 0xFF) return TJpgD::JDR_FMT1;
 		marker = *(seg++);		/* Marker */
 		len = LDB_WORD(seg);	/* Length field */
-		if (len <= 2) return JDR_FMT1;
+		if (len <= 2) return TJpgD::JDR_FMT1;
 		len -= 2;		/* Content size excluding length field */
 
 		/* Load segment data */
 		if (dctr < len) {
-			if (len - dctr > (TJPGD_SZBUF - (dptr - inbuf))) return JDR_MEM2;
+			if (len - dctr > (TJPGD_SZBUF - (dptr - inbuf))) return TJpgD::JDR_MEM2;
 			dctr += infunc(this, dptr + dctr, len - dctr);
-			if (dctr < len) return JDR_INP;
+			if (dctr < len) return TJpgD::JDR_INP;
 		}
 		seg = dptr;
 		dptr += len;
@@ -742,21 +742,21 @@ JRESULT TJpgD::prepare (
 		case 0xC0:	/* SOF0 (baseline JPEG) */
 			width = LDB_WORD(seg+3);		/* Image width in unit of pixel */
 			height = LDB_WORD(seg+1);		/* Image height in unit of pixel */
-			if (seg[5] != 3) return JDR_FMT3;	/* Err: Supports only Y/Cb/Cr format */
+			if (seg[5] != 3) return TJpgD::JDR_FMT3;	/* Err: Supports only Y/Cb/Cr format */
 
 			/* Check three image components */
 			for (i = 0; i < 3; i++) {
 				b = seg[7 + 3 * i];							/* Get sampling factor */
 				if (!i) {	/* Y component */
 					if (b != 0x11 && b != 0x22 && b != 0x21) {	/* Check sampling factor */
-						return JDR_FMT3;					/* Err: Supports only 4:4:4, 4:2:0 or 4:2:2 */
+						return TJpgD::JDR_FMT3;					/* Err: Supports only 4:4:4, 4:2:0 or 4:2:2 */
 					}
 					msx = b >> 4; msy = b & 15;		/* Size of MCU [blocks] */
 				} else {	/* Cb/Cr component */
-					if (b != 0x11) return JDR_FMT3;			/* Err: Sampling factor of Cr/Cb must be 1 */
+					if (b != 0x11) return TJpgD::JDR_FMT3;			/* Err: Sampling factor of Cr/Cb must be 1 */
 				}
 				b = seg[8 + 3 * i];							/* Get dequantizer table ID for this component */
-				if (b > 3) return JDR_FMT3;					/* Err: Invalid ID */
+				if (b > 3) return TJpgD::JDR_FMT3;					/* Err: Invalid ID */
 				qtid[i] = b;
 			}
 			break;
@@ -768,40 +768,40 @@ JRESULT TJpgD::prepare (
 
 		case 0xC4:	/* DHT */
 			/* Create huffman tables */
-			rc = (JRESULT)create_huffman_tbl(this, seg, len);
+			rc = (TJpgD::JRESULT)create_huffman_tbl(this, seg, len);
 			if (rc) return rc;
 			break;
 
 		case 0xDB:	/* DQT */
 			/* Create de-quantizer tables */
-			rc = (JRESULT)create_qt_tbl(this, seg, len);
+			rc = (TJpgD::JRESULT)create_qt_tbl(this, seg, len);
 			if (rc) return rc;
 			break;
 
 		case 0xDA:	/* SOS */
-			if (!width || !height) return JDR_FMT1;	/* Err: Invalid image size */
+			if (!width || !height) return TJpgD::JDR_FMT1;	/* Err: Invalid image size */
 
-			if (seg[0] != 3) return JDR_FMT3;				/* Err: Supports only three color components format */
+			if (seg[0] != 3) return TJpgD::JDR_FMT3;				/* Err: Supports only three color components format */
 
 			/* Check if all tables corresponding to each components have been loaded */
 			for (i = 0; i < 3; i++) {
 				b = seg[2 + 2 * i];	/* Get huffman table ID */
-				if (b != 0x00 && b != 0x11)	return JDR_FMT3;	/* Err: Different table number for DC/AC element */
+				if (b != 0x00 && b != 0x11)	return TJpgD::JDR_FMT3;	/* Err: Different table number for DC/AC element */
 				b = i ? 1 : 0;
 				if (!huffbits[b][0] || !huffbits[b][1]) {	/* Check dc/ac huffman table for this component */
-					return JDR_FMT1;					/* Err: Nnot loaded */
+					return TJpgD::JDR_FMT1;					/* Err: Nnot loaded */
 				}
 				if (!qttbl[qtid[i]]) {			/* Check dequantizer table for this component */
-					return JDR_FMT1;					/* Err: Not loaded */
+					return TJpgD::JDR_FMT1;					/* Err: Not loaded */
 				}
 			}
 
 			/* Allocate working buffer for MCU and RGB */
-			if (!msy || !msx) return JDR_FMT1;					/* Err: SOF0 has not been loaded */
+			if (!msy || !msx) return TJpgD::JDR_FMT1;					/* Err: SOF0 has not been loaded */
 			dmsk = 0;
 			--dptr;
 
-			return JDR_OK;		/* Initialization succeeded. Ready to decompress the JPEG image. */
+			return TJpgD::JDR_OK;		/* Initialization succeeded. Ready to decompress the JPEG image. */
 
 		case 0xC1:	/* SOF1 */
 		case 0xC2:	/* SOF2 */
@@ -816,7 +816,7 @@ JRESULT TJpgD::prepare (
 		case 0xCE:	/* SOF14 */
 		case 0xCF:	/* SOF15 */
 		case 0xD9:	/* EOI */
-			return JDR_FMT3;	/* Unsuppoted JPEG standard (may be progressive JPEG) */
+			return TJpgD::JDR_FMT3;	/* Unsuppoted JPEG standard (may be progressive JPEG) */
 
 		default:	/* Unknown segment (comment, exif or etc..) */
 			break;
@@ -831,15 +831,15 @@ JRESULT TJpgD::prepare (
 /* Start to decompress the JPEG picture                                  */
 /*-----------------------------------------------------------------------*/
 
-JRESULT TJpgD::decomp (
-	uint16_t (*outfunc)(TJpgD*, void*, JRECT*),	/* RGB output function */
-	uint16_t (*linefunc)(TJpgD*,uint16_t,uint8_t),
-	uint8_t lineskip						/* linefunc skip number */
+TJpgD::JRESULT TJpgD::decomp (
+	uint32_t (*outfunc)(TJpgD*, void*, TJpgD::JRECT*),	/* RGB output function */
+	uint32_t (*linefunc)(TJpgD*,uint32_t,uint32_t),
+	uint32_t lineskip						/* linefunc skip number */
 )
 {
 	uint16_t x, y, mx, my;
 	uint16_t rst, rsc;
-	JRESULT rc;
+	TJpgD::JRESULT rc;
 	uint8_t workbuf[512];
 	uint8_t mcubuf[384];
 	uint8_t yidx = 0;
@@ -852,18 +852,18 @@ JRESULT TJpgD::decomp (
 	dcv[2] = dcv[1] = dcv[0] = 0;	/* Initialize DC values */
 	rst = rsc = 0;
 
-	rc = JDR_OK;
+	rc = TJpgD::JDR_OK;
 	for (y = 0; y < height; y += my) {		/* Vertical loop of MCUs */
 		for (x = 0; x < width; x += mx) {	/* Horizontal loop of MCUs */
 			if (nrst && rst++ == nrst) {	/* Process restart interval if enabled */
 				rc = restart(this, rsc++);
-				if (rc != JDR_OK) return rc;
+				if (rc != TJpgD::JDR_OK) return rc;
 				rst = 1;
 			}
 			rc = mcu_load(this, mcubuf, (int32_t*)workbuf);		/* Load an MCU (decompress huffman coded stream and apply IDCT) */
-			if (rc != JDR_OK) return rc;
+			if (rc != TJpgD::JDR_OK) return rc;
 			rc = mcu_output(this, mcubuf, (uint8_t*)workbuf, outfunc, x, y);	/* Output the MCU (color space conversion, scaling and output) */
-			if (rc != JDR_OK) return rc;
+			if (rc != TJpgD::JDR_OK) return rc;
 		}
 		if (linefunc && (yidx == lineskip || y == lasty)) {
 			linefunc(this, y - yidx * my, yidx * my + ((height < y + my) ? height - y : my));
@@ -891,8 +891,8 @@ typedef struct {
 
 typedef struct {
 	TJpgD* jd;
-	uint16_t (*outfunc)(TJpgD*, void*, JRECT*);
-	uint16_t (*linefunc)(TJpgD*,uint16_t,uint8_t);
+	uint32_t (*outfunc)(TJpgD*, void*, TJpgD::JRECT*);
+	uint32_t (*linefunc)(TJpgD*,uint32_t,uint32_t);
 	QueueHandle_t sem;
 	TaskHandle_t task;
 } param_task_output;
@@ -942,15 +942,15 @@ void TJpgD::multitask_end ()
 	delay(10);
 }
 
-JRESULT TJpgD::decomp_multitask (
-	uint16_t (*outfunc)(TJpgD*, void*, JRECT*),	/* RGB output function */
-	uint16_t (*linefunc)(TJpgD*,uint16_t,uint8_t),
-	uint8_t lineskip						/* linefunc skip number */
+TJpgD::JRESULT TJpgD::decomp_multitask (
+	uint32_t (*outfunc)(TJpgD*, void*, TJpgD::JRECT*),	/* RGB output function */
+	uint32_t (*linefunc)(TJpgD*,uint32_t,uint32_t),
+	uint32_t lineskip						/* linefunc skip number */
 )
 {
 	uint16_t x, y, mx, my;
 	uint16_t rst, rsc;
-	JRESULT rc;
+	TJpgD::JRESULT rc;
 	uint8_t workbuf[512];
 	uint8_t yidx = 0;
 
@@ -970,16 +970,16 @@ JRESULT TJpgD::decomp_multitask (
 	rst = rsc = 0;
 	uint16_t lasty = ((height - 1) / my) * my;
 
-	rc = JDR_OK;
+	rc = TJpgD::JDR_OK;
 	for (y = 0; y < height; y += my) {		/* Vertical loop of MCUs */
 		for (x = 0; x < width; x += mx) {	/* Horizontal loop of MCUs */
 			if (nrst && rst++ == nrst) {	/* Process restart interval if enabled */
 				rc = restart(this, rsc++);
-				if (rc != JDR_OK) break;
+				if (rc != TJpgD::JDR_OK) break;
 				rst = 1;
 			}
 			rc = mcu_load(this, mcubufs[mcuidx], (int32_t*)workbuf);
-			if (rc != JDR_OK) break;
+			if (rc != TJpgD::JDR_OK) break;
 			if (!q->queue) {
 //mcubufs[mcuidx][0] = 0;
 //mcubufs[mcuidx][1] = 0;
@@ -998,7 +998,7 @@ JRESULT TJpgD::decomp_multitask (
 				rc = mcu_output(this, mcubufs[mcuidx], workbuf, outfunc, x, y);
 			}
 		}
-		if (rc != JDR_OK) break;
+		if (rc != TJpgD::JDR_OK) break;
 		if (linefunc && (yidx == lineskip || y == lasty)) {
 			while (ql->queue) taskYIELD();
 			while (xQueueReceive(param.sem, &qtmp, 0)) {
