@@ -688,14 +688,12 @@ TJpgD::JRESULT TJpgD::prepare (
 {
 	uint8_t *seg, b;
 	uint8_t marker;
-	uint16_t i, j, len;
+	uint16_t i, len;
 	TJpgD::JRESULT rc;
 
 	const uint16_t sz_pool = 3100;
 	static uint8_t pool[sz_pool];
 
-
-	if (!pool) return TJpgD::JDR_PAR;
 
 	this->pool = pool;		/* Work memroy */
 	this->sz_pool = sz_pool;	/* Size of given work memory */
