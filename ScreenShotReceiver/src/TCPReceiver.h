@@ -3,7 +3,10 @@
 
 #pragma GCC optimize ("O3")
 
+#ifndef LOVYANGFX_HPP_
 #include <LovyanGFX.hpp>  // https://github.com/lovyan03/LovyanGFX/
+#endif
+
 #include <WiFi.h>
 #include <WiFiServer.h>
 #include <esp_heap_caps.h>

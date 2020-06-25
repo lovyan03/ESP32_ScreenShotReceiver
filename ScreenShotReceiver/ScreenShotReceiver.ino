@@ -4,9 +4,6 @@
 #include <M5StackUpdater.h>     // https://github.com/tobozo/M5Stack-SD-Updater/
 #endif
 
-#include <LovyanGFX.hpp>  // https://github.com/lovyan03/LovyanGFX/
-
-#include <WiFi.h>
 #include <esp_wifi.h>
 
 #include "src/TCPReceiver.h"
