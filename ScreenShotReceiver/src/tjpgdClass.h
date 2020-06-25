@@ -45,7 +45,7 @@ struct TJpgD {
 
 	/* Rectangular structure */
 	typedef struct {
-		uint16_t left, right, top, bottom;
+		int_fast16_t left, right, top, bottom;
 	} JRECT;
 
 	uint_fast16_t dctr;			/* Number of bytes available in the input buffer */
@@ -54,9 +54,9 @@ struct TJpgD {
 	uint_fast8_t dmsk;			/* Current bit in the current read byte */
 	uint_fast8_t bayer;			/* Output bayer gain */
 	uint_fast8_t msx, msy;		/* MCU size in unit of block (width, height) */
-	uint8_t qtid[3];			/* Quantization table ID of each component */
-	int16_t dcv[3];				/* Previous DC element of each component */
-	uint16_t nrst;				/* Restart inverval */
+	uint_fast8_t qtid[3];		/* Quantization table ID of each component */
+	int_fast16_t dcv[3];		/* Previous DC element of each component */
+	uint_fast16_t nrst;			/* Restart inverval */
 	int32_t width, height;		/* Size of the input image (pixel) */
 	uint8_t* huffbits[2][2];	/* Huffman bit distribution tables [id][dcac] */
 	uint16_t* huffcode[2][2];	/* Huffman code word tables [id][dcac] */

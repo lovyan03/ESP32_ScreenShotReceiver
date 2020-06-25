@@ -20,10 +20,12 @@ public:
     _lcd->startWrite();
     Serial.println("TCPReceiver setup.");
 
-    _tft_width = lcd->width();
-    _tft_height = lcd->height();
+    _lcd_width = lcd->width();
+    _lcd_height = lcd->height();
 
-    for (int i = 0; i < 2; ++i) _dmabuf[i] = (uint16_t*)heap_caps_malloc(_tft_width * 48 * 2, MALLOC_CAP_DMA);
+    for (int i = 0; i < 2; ++i) _dmabufs[i] = (uint16_t*)heap_caps_malloc(_lcd_width * 48 * 2, MALLOC_CAP_DMA);
+
+    _dmabuf = _dmabufs[0];
 
     _tcp.setNoDelay(true);
     _tcp.begin(63333);
@@ -108,16 +110,16 @@ private:
   static constexpr int SENDER_PREFIX_SIZE = 7;
 
   LGFX* _lcd;
-  uint16_t* _dmabuf[2];
-  bool _flip;
+  uint16_t* _dmabufs[2];
+  uint16_t* _dmabuf;
 
   WiFiServer _tcp;
   WiFiClient _client;
   TJpgD _jdec;
   int32_t _recv_remain = 0;
   uint32_t _sec = 0;
-  int32_t _tft_width;
-  int32_t _tft_height;
+  int32_t _lcd_width;
+  int32_t _lcd_height;
   int32_t _out_width;
   int32_t _out_height;
   int32_t _off_x;
@@ -178,7 +180,7 @@ private:
   static uint32_t jpgWrite(TJpgD *jdec, void *bitmap, TJpgD::JRECT *rect) {
     TCPReceiver* me = (TCPReceiver*)jdec->device;
 
-    auto dst = me->_dmabuf[me->_flip];
+    auto dst = me->_dmabuf;
 
     uint_fast16_t x = rect->left;
     uint_fast16_t y = rect->top;
@@ -226,6 +228,7 @@ private:
   }
 
   static uint32_t jpgWriteRow(TJpgD *jdec, uint32_t y, uint32_t h) {
+    static int flip = 0;
     TCPReceiver* me = (TCPReceiver*)jdec->device;
 
     if (y == 0)
@@ -237,14 +240,15 @@ private:
       h += outY;
       outY = 0;
     }
-    if (me->_tft_height <= me->_jpg_y + outY) return 1;
-    if (me->_tft_height < me->_jpg_y + outY + h) {
-      h = me->_tft_height - (me->_jpg_y + outY);
+    if (me->_lcd_height <= me->_jpg_y + outY) return 1;
+    if (me->_lcd_height < me->_jpg_y + outY + h) {
+      h = me->_lcd_height - (me->_jpg_y + outY);
     }
 
-    me->_lcd->pushPixelsDMA(me->_dmabuf[me->_flip], me->_out_width * h * 2);
+    me->_lcd->pushPixelsDMA(me->_dmabuf, me->_out_width * h * 2);
 
-    me->_flip = !me->_flip;
+    flip = !flip;
+    me->_dmabuf = me->_dmabufs[flip];
     return 1;
   }
 
@@ -254,16 +258,16 @@ private:
       Serial.printf("prepare failed! %d\r\n", jres);
       return false;
     }
-    _out_width = std::min<int32_t>(_jdec.width, _tft_width);
-    _jpg_x = (_tft_width - _jdec.width) >> 1;
+    _out_width = std::min<int32_t>(_jdec.width, _lcd_width);
+    _jpg_x = (_lcd_width - _jdec.width) >> 1;
     if (0 > _jpg_x) {
       _off_x = - _jpg_x;
       _jpg_x = 0;
     } else {
       _off_x = 0;
     }
-    _out_height = std::min<int32_t>(_jdec.height, _tft_height);
-    _jpg_y = (_tft_height- _jdec.height) >> 1;
+    _out_height = std::min<int32_t>(_jdec.height, _lcd_height);
+    _jpg_y = (_lcd_height- _jdec.height) >> 1;
     if (0 > _jpg_y) {
       _off_y = - _jpg_y;
       _jpg_y = 0;

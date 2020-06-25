@@ -3,7 +3,7 @@
 [![movie](http://img.youtube.com/vi/-bT72JhCF5o/0.jpg)](http://www.youtube.com/watch?v=-bT72JhCF5o "movie")
   
 PCの画面をJPEGにしてTCPで送信し、ESP32で受信して表示します。  
-Send the screen of your PC as a JPEG, send it by TCP, receive it by ESP32, and display it It is.  
+Send the screen of your PC as a JPEG, send it by TCP, receive it by ESP32, and display it.  
   
 
 ## 対応環境 Environment

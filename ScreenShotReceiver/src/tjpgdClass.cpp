@@ -19,15 +19,18 @@
 / Mar 16, 2019 R0.01c Supprted stdint.h.
 /----------------------------------------------------------------------------/
 /  modify by lovyan03
-/ May 29, 2019 Tweak for ArduinoESP32
+/ May 29, 2019 Tweak for ESP32
 /----------------------------------------------------------------------------*/
 
 #pragma GCC optimize ("O3")
 
 #include "tjpgdClass.h"
 
-#include <Arduino.h>
-#include <esp_task.h>
+#include <string.h> // for memcpy memset
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include <freertos/queue.h>
+
 
 /*-----------------------------------------------*/
 /* Zigzag-order to raster-order conversion table */
@@ -129,7 +132,7 @@ static const uint8_t Clip8[1024] = {
 
 #else	/* JD_TBLCLIP */
 
-inline uint8_t BYTECLIP (
+inline uint_fast8_t BYTECLIP (
 	int32_t val
 )
 {
@@ -157,7 +160,7 @@ inline uint8_t BYTECLIP (
 
 static void* alloc_pool (	/* Pointer to allocated memory block (NULL:no memory available) */
 	TJpgD* jd,		/* Pointer to the decompressor object */
-	uint16_t nd		/* Number of bytes to allocate */
+	uint_fast16_t nd		/* Number of bytes to allocate */
 )
 {
 	char *rp = 0;
@@ -184,10 +187,10 @@ static void* alloc_pool (	/* Pointer to allocated memory block (NULL:no memory a
 static int create_qt_tbl (	/* 0:OK, !0:Failed */
 	TJpgD* jd,				/* Pointer to the decompressor object */
 	const uint8_t* data,	/* Pointer to the quantizer tables */
-	uint16_t ndata			/* Size of input data */
+	uint_fast16_t ndata			/* Size of input data */
 )
 {
-	uint8_t d, z;
+	uint_fast8_t d, z;
 	int32_t *pb;
 
 	do {	/* Process all tables in the segment */
@@ -216,7 +219,7 @@ static int create_qt_tbl (	/* 0:OK, !0:Failed */
 static int create_huffman_tbl (	/* 0:OK, !0:Failed */
 	TJpgD* jd,					/* Pointer to the decompressor object */
 	const uint8_t* data,		/* Pointer to the packed huffman tables */
-	uint16_t ndata				/* Size of input data */
+	uint_fast16_t ndata				/* Size of input data */
 )
 {
 	uint_fast16_t d, b, np, cls, num, hc;
@@ -236,7 +239,7 @@ static int create_huffman_tbl (	/* 0:OK, !0:Failed */
 			np += (pb[i] = data[i]);		/* Get sum of code words for each code */
 		}
 
-		ph = (uint16_t*)alloc_pool(jd, (uint16_t)(np * sizeof (uint16_t)));/* Allocate a memory block for the code word table */
+		ph = (uint16_t*)alloc_pool(jd, (np * sizeof (uint16_t)));/* Allocate a memory block for the code word table */
 		if (!ph) return TJpgD::JDR_MEM1;			/* Err: not enough memory */
 		jd->huffcode[num][cls] = ph - 1;
 		hc = 0;
@@ -264,7 +267,7 @@ static int create_huffman_tbl (	/* 0:OK, !0:Failed */
 /* Extract N bits from input stream                                      */
 /*-----------------------------------------------------------------------*/
 
-static int16_t bitext (	/* >=0: extracted data, <0: error code */
+static int_fast16_t bitext (	/* >=0: extracted data, <0: error code */
 	TJpgD* jd,		/* Pointer to the decompressor object */
 	int_fast16_t nbit		/* Number of bits to extract (1 to 11) */
 )
@@ -282,7 +285,7 @@ bitext_goto:
 			if (!dc) {			/* No input data is available, re-fill input buffer */
 				dp = jd->inbuf;	/* Top of input buffer */
 				dc = jd->infunc(jd, dp, TJPGD_SZBUF);
-				if (!dc) return 0 - (int16_t)TJpgD::JDR_INP;	/* Err: read error or wrong stream termination */
+				if (!dc) return 0 - (int_fast16_t)TJpgD::JDR_INP;	/* Err: read error or wrong stream termination */
 			} else {
 				++dp;			/* Next data ptr */
 			}
@@ -294,7 +297,7 @@ bitext_goto:
 					goto bitext_goto;	/* Enter flag sequence */
 				}
 			} else {			/* Exit flag sequence */
-				if (*dp != 0) return 0 - (int32_t)TJpgD::JDR_FMT1;	/* Err: unexpected flag is detected (may be collapted data) */
+				if (*dp != 0) return 0 - (int_fast16_t)TJpgD::JDR_FMT1;	/* Err: unexpected flag is detected (may be collapted data) */
 				*dp = s = 0xFF;			/* The flag is a data 0xFF */
 			}
 		}
@@ -315,7 +318,7 @@ bitext_goto:
 /* Extract a huffman decoded data from input stream                      */
 /*-----------------------------------------------------------------------*/
 
-static int16_t huffext (	/* >=0: decoded data, <0: error code */
+static int_fast16_t huffext (	/* >=0: decoded data, <0: error code */
 	TJpgD* jd,				/* Pointer to the decompressor object */
 	const uint8_t* hbits,	/* Pointer to the bit distribution table */
 	const uint16_t* hcode,	/* Pointer to the code word table */
@@ -336,7 +339,7 @@ huffext_goto:
 			if (!dc) {	/* No input data is available, re-fill input buffer */
 				dp = jd->inbuf;	/* Top of input buffer */
 				dc = jd->infunc(jd, dp, TJPGD_SZBUF);
-				if (!dc) return 0 - (int16_t)TJpgD::JDR_INP;	/* Err: read error or wrong stream termination */
+				if (!dc) return 0 - (int_fast16_t)TJpgD::JDR_INP;	/* Err: read error or wrong stream termination */
 			} else {
 				++dp;	/* Next data ptr */
 			}
@@ -348,7 +351,7 @@ huffext_goto:
 					goto huffext_goto;	/* Enter flag sequence, get trailing byte */
 				}
 			} else {			/* Exit flag sequence */
-				if (*dp != 0) return 0 - (int32_t)TJpgD::JDR_FMT1;	/* Err: unexpected flag is detected (may be collapted data) */
+				if (*dp != 0) return 0 - (int_fast16_t)TJpgD::JDR_FMT1;	/* Err: unexpected flag is detected (may be collapted data) */
 				*dp = s = 0xFF;			/* The flag is a data 0xFF */
 			}
 		}
@@ -363,7 +366,7 @@ huffext_goto:
 		}
 	} while (--bl);
 
-	return 0 - (int16_t)TJpgD::JDR_FMT1;	/* Err: code not found (may be collapted data) */
+	return 0 - (int_fast16_t)TJpgD::JDR_FMT1;	/* Err: code not found (may be collapted data) */
 }
 
 
@@ -395,11 +398,9 @@ static void block_idct (
 		t12 = v6 - v7;
 		v7 += v6;
 		v5 = (t11 - v7) * M13 >> 8;
-		v7 += t11;
 		t13 = (t10 + t12) * M5 >> 8;
-		v6 = t13 - ((t12 * M4 >> 8) + v7);
-		v5 -= v6;
-		v4 = t13 - ((t10 * M2 >> 8) + v5);
+		v6 = t13 - ((t12 * M4 >> 8) + (v7 += t11));
+		v4 = t13 - ((t10 * M2 >> 8) + (v5 -= v6));
 
 		/* Get and Process the even elements */
 		v0 = src[8 * 0];
@@ -446,7 +447,7 @@ static void block_idct (
 		v5 = (t11 - v7) * M13 >> 8;
 		v7 += t11;
 		t13 = (t10 + t12) * M5 >> 8;
-		v6 = t13 - (t12 * M4 >> 8) - v7;
+		v6 = t13 - ((t12 * M4 >> 8) + v7);
 		v4 = t13 - (t10 * M2 >> 8);
 		v5 -= v6;
 		v4 -= v5;
@@ -686,9 +687,9 @@ TJpgD::JRESULT TJpgD::prepare (
 	void* dev			/* I/O device identifier for the session */
 )
 {
-	uint8_t *seg, b;
-	uint8_t marker;
-	uint16_t i, len;
+	uint8_t *seg;
+	uint_fast8_t b, marker;
+	uint_fast16_t i, len;
 	TJpgD::JRESULT rc;
 
 	const uint16_t sz_pool = 3100;
@@ -881,10 +882,10 @@ TJpgD::JRESULT TJpgD::decomp (
 
 typedef struct {
 	uint8_t* mcubuf = NULL;
-	uint16_t x = 0;
-	uint16_t y = 0;
-	uint8_t h = 0;
-	volatile bool queue = false;
+	uint_fast16_t x = 0;
+	uint_fast16_t y = 0;
+	uint_fast8_t h = 0;
+	volatile uint_fast8_t queue = false;
 } queue_t;
 
 typedef struct {
@@ -895,13 +896,13 @@ typedef struct {
 	TaskHandle_t task;
 } param_task_output;
 
-static const uint8_t queue_max = 20;
+static constexpr uint_fast8_t queue_max = 20;
 static param_task_output param;
 static uint8_t mcubufs[queue_max + 1][384];
 static queue_t qwrites[queue_max];
 static queue_t qline;
-static uint8_t qidx = 0;
-static uint8_t mcuidx = 0;
+static uint_fast8_t qidx = 0;
+static uint_fast8_t mcuidx = 0;
 
 static void task_output(void* arg)
 {
@@ -937,7 +938,7 @@ void TJpgD::multitask_end ()
 {
 	queue_t* q = NULL;
 	xQueueSend(param.sem, &q, 0);
-	delay(10);
+	vTaskDelay(10);
 }
 
 TJpgD::JRESULT TJpgD::decomp_multitask (
@@ -946,11 +947,11 @@ TJpgD::JRESULT TJpgD::decomp_multitask (
 	uint32_t lineskip						/* linefunc skip number */
 )
 {
-	uint16_t x, y, mx, my;
-	uint16_t rst, rsc;
+	uint_fast16_t x, y, mx, my;
+	uint_fast16_t rst, rsc;
 	TJpgD::JRESULT rc;
 	uint8_t workbuf[512];
-	uint8_t yidx = 0;
+	uint_fast16_t yidx = 0;
 
 
 	bayer = (bayer + 1) & 7;
@@ -966,7 +967,7 @@ TJpgD::JRESULT TJpgD::decomp_multitask (
 
 	dcv[2] = dcv[1] = dcv[0] = 0;	/* Initialize DC values */
 	rst = rsc = 0;
-	uint16_t lasty = ((height - 1) / my) * my;
+	uint_fast16_t lasty = ((height - 1) / my) * my;
 
 	rc = TJpgD::JDR_OK;
 	for (y = 0; y < height; y += my) {		/* Vertical loop of MCUs */
