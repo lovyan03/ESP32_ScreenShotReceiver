@@ -1,5 +1,9 @@
 #pragma GCC optimize ("O3")
 
+#if defined(ARDUINO_M5Stack_Core_ESP32) || defined(ARDUINO_M5STACK_FIRE)
+#include <M5StackUpdater.h>     // https://github.com/tobozo/M5Stack-SD-Updater/
+#endif
+
 #include <LovyanGFX.hpp>  // https://github.com/lovyan03/LovyanGFX/
 
 #include <WiFi.h>
@@ -14,8 +18,19 @@ void setup(void)
 {
   Serial.begin(115200);
   Serial.flush();
-  lcd.begin();
 
+#if defined ( __M5STACKUPDATER_H )
+  M5.begin();
+  #ifdef __M5STACKUPDATER_H
+    if(digitalRead(BUTTON_A_PIN) == 0) {
+       Serial.println("Will Load menu binary");
+       updateFromFS(SD);
+       ESP.restart();
+    }
+  #endif
+#endif
+
+  lcd.begin();
   lcd.setRotation(0);
   if (lcd.width() < lcd.height())
     lcd.setRotation(1);

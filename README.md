@@ -44,6 +44,8 @@ Hold down the Shift key and use the cursor keys : Adjust the width and height.
 ## 必要なライブラリ Requirement library
 
 * https://github.com/lovyan03/LovyanGFX/  
+* https://github.com/tobozo/M5Stack-SD-Updater/  (for M5Stack)  
+
 
 
 ## 含まれているライブラリ Included library
