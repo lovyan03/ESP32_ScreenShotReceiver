@@ -17,7 +17,7 @@
 class TCPReceiver
 {
 public:
-  bool setup(LGFX* lcd)
+  bool setup(LovyanGFX* lcd)
   {
     _lcd = lcd;
     _lcd->startWrite();
@@ -112,7 +112,7 @@ private:
   static constexpr int TCP_BUF_LEN = 512;
   static constexpr int SENDER_PREFIX_SIZE = 7;
 
-  LGFX* _lcd;
+  LovyanGFX* _lcd;
   uint16_t* _dmabufs[2];
   uint16_t* _dmabuf;
 
