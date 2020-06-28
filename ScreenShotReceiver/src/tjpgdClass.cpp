@@ -151,7 +151,7 @@ inline uint_fast8_t BYTECLIP (
 /*----------------------------------*/
 
 #define dma565Color(r, g, b) \
-        (uint16_t)( ((b >> 3) << 8) | ((g >> 2) << 13) | ((g >> 5) | ((r>>3)<<3)))
+        ( ((b >> 3) << 8) | ((g >> 2) << 13) | ((g >> 5) | ((r>>3)<<3)))
 
 
 /*-----------------------------------------------------------------------*/
@@ -611,10 +611,11 @@ static TJpgD::JRESULT mcu_output (
 				g = BYTECLIP(yy - (((int32_t)(0.34414 * 256) * cb
 								  + (int32_t)(0.71414 * 256) * cr) >> 8));
 				b = BYTECLIP(yy + (((int32_t)(1.772   * 256) * cb) >> 8));
-				*rgb16++ = dma565Color(r, g, b);
+				rgb16[ix] = dma565Color(r, g, b);
 			} while (++ix & 7);
 			py += 64 - 8;	/* Jump to next block if double block heigt */
 		} while (ix != mx);
+		rgb16 += mx;
 	} while (++iy != my);
 
 	if (rx < mx) {
@@ -637,11 +638,11 @@ static TJpgD::JRESULT mcu_output (
 
 static TJpgD::JRESULT restart (
 	TJpgD* jd,		/* Pointer to the decompressor object */
-	uint16_t rstn	/* Expected restert sequense number */
+	uint_fast16_t rstn	/* Expected restert sequense number */
 )
 {
 	uint_fast16_t dc;
-	uint16_t d;
+	uint_fast16_t d;
 	uint8_t *dp;
 
 
@@ -692,7 +693,7 @@ TJpgD::JRESULT TJpgD::prepare (
 	uint_fast16_t i, len;
 	TJpgD::JRESULT rc;
 
-	const uint16_t sz_pool = 3100;
+	static constexpr uint_fast16_t sz_pool = 3100;
 	static uint8_t pool[sz_pool];
 
 
@@ -970,8 +971,10 @@ TJpgD::JRESULT TJpgD::decomp_multitask (
 	uint_fast16_t lasty = ((height - 1) / my) * my;
 
 	rc = TJpgD::JDR_OK;
-	for (y = 0; y < height; y += my) {		/* Vertical loop of MCUs */
-		for (x = 0; x < width; x += mx) {	/* Horizontal loop of MCUs */
+	y = 0;
+	do {		/* Vertical loop of MCUs */
+		x = 0;
+		do {	/* Horizontal loop of MCUs */
 			if (nrst && rst++ == nrst) {	/* Process restart interval if enabled */
 				rc = restart(this, rsc++);
 				if (rc != TJpgD::JDR_OK) break;
@@ -996,7 +999,7 @@ TJpgD::JRESULT TJpgD::decomp_multitask (
 //mcubufs[mcuidx][1] = 0xFF;
 				rc = mcu_output(this, mcubufs[mcuidx], workbuf, outfunc, x, y);
 			}
-		}
+		} while ((x += mx) < width);
 		if (rc != TJpgD::JDR_OK) break;
 		if (linefunc && (yidx == lineskip || y == lasty)) {
 			while (ql->queue) taskYIELD();
@@ -1014,8 +1017,7 @@ TJpgD::JRESULT TJpgD::decomp_multitask (
 		} else {
 			++yidx;
 		}
-	}
-
+	} while ((y += my) < height);
 	return rc;
 }
 
