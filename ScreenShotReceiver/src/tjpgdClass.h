@@ -48,8 +48,8 @@ struct TJpgD {
 		int_fast16_t left, right, top, bottom;
 	} JRECT;
 
-	uint_fast16_t dctr;			/* Number of bytes available in the input buffer */
 	uint8_t* dptr;				/* Current data read ptr */
+	uint8_t* dpend;				/* data end ptr */
 	uint8_t* inbuf;				/* Bit stream input buffer */
 	uint_fast8_t dmsk;			/* Current bit in the current read byte */
 	uint_fast8_t bayer;			/* Output bayer gain */

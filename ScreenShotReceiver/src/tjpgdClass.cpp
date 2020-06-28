@@ -272,41 +272,38 @@ static int_fast16_t bitext (	/* >=0: extracted data, <0: error code */
 	int_fast16_t nbit		/* Number of bits to extract (1 to 11) */
 )
 {
-	uint8_t *dp;
-	uint_fast8_t msk, s;
-	uint_fast16_t dc, v;
+	uint8_t *dp, *dpend;
+	uint_fast8_t msk, s, shift;
+	uint_fast16_t v;
 
-	msk = jd->dmsk; dc = jd->dctr; dp = jd->dptr;	/* Bit mask, number of data available, read ptr */
+	msk = jd->dmsk; dp = jd->dptr; dpend = jd->dpend;	/* Bit mask, number of data available, read ptr */
 	s = *dp; v = 0;
-	size_t shift;
+
 	do {
 		if (!msk) {				/* Next byte? */
-bitext_goto:
-			if (!dc) {			/* No input data is available, re-fill input buffer */
+			msk = 8;		/* Read from MSB */
+								/* Next data ptr */
+			if (++dp == dpend) {			/* No input data is available, re-fill input buffer */
 				dp = jd->inbuf;	/* Top of input buffer */
-				dc = jd->infunc(jd, dp, TJPGD_SZBUF);
-				if (!dc) return 0 - (int_fast16_t)TJpgD::JDR_INP;	/* Err: read error or wrong stream termination */
-			} else {
-				++dp;			/* Next data ptr */
+				dpend = dp + jd->infunc(jd, dp, TJPGD_SZBUF);
+				if (dp == dpend) return 0 - (int_fast16_t)TJpgD::JDR_INP;	/* Err: read error or wrong stream termination */
 			}
-			--dc;				/* Decrement number of available bytes */
-			if (!msk) {			/* Not in flag sequence? */
-				msk = 8;		/* Read from MSB */
-				s = *dp;				/* Get next data byte */
-				if (s == 0xFF) {		/* Is start of flag sequence? */
-					goto bitext_goto;	/* Enter flag sequence */
+			s = *dp;				/* Get next data byte */
+			if (s == 0xFF) {		/* Is start of flag sequence? */
+				if (++dp == dpend) {			/* No input data is available, re-fill input buffer */
+					dp = jd->inbuf;	/* Top of input buffer */
+					dpend = dp + jd->infunc(jd, dp, TJPGD_SZBUF);
+					if (dp == dpend) return 0 - (int_fast16_t)TJpgD::JDR_INP;	/* Err: read error or wrong stream termination */
 				}
-			} else {			/* Exit flag sequence */
 				if (*dp != 0) return 0 - (int_fast16_t)TJpgD::JDR_FMT1;	/* Err: unexpected flag is detected (may be collapted data) */
-				*dp = s = 0xFF;			/* The flag is a data 0xFF */
+				*dp = s;			/* The flag is a data 0xFF */
 			}
 		}
 		shift = msk < nbit ? msk : nbit;
 		msk -= shift;
-		if (shift == 8)		v = (v << shift) | (s >> msk);
-		else v = (v << shift) | ((s >> msk) & ((1 << shift) - 1));	/* Get a bit */
+		v = (v << shift) | ((s >> msk) & ((1 << shift) - 1));	/* Get a bit */
 	} while (nbit -= shift);
-	jd->dmsk = msk; jd->dctr = dc; jd->dptr = dp;
+	jd->dmsk = msk; jd->dptr = dp;  jd->dpend = dpend;
 
 	return v;
 }
@@ -326,47 +323,44 @@ static int_fast16_t huffext (	/* >=0: decoded data, <0: error code */
 )
 {
 	uint_fast8_t msk, s, bl, nd;
-	uint8_t *dp;
-	uint_fast16_t dc, v;
+	uint8_t *dp, *dpend;
+	uint_fast16_t v;
 
-
-	msk = jd->dmsk; dc = jd->dctr; dp = jd->dptr;	/* Bit mask, number of data available, read ptr */
+	msk = jd->dmsk; dp = jd->dptr; dpend = jd->dpend;	/* Bit mask, number of data available, read ptr */
 	s = *dp; v = 0;
 	bl = 16;	/* Max code length */
-	do {
+	for (;;) {
 		if (!msk) {		/* Next byte? */
-huffext_goto:
-			if (!dc) {	/* No input data is available, re-fill input buffer */
+			msk = 8;		/* Read from MSB */
+								/* Next data ptr */
+			if (++dp == dpend) {			/* No input data is available, re-fill input buffer */
 				dp = jd->inbuf;	/* Top of input buffer */
-				dc = jd->infunc(jd, dp, TJPGD_SZBUF);
-				if (!dc) return 0 - (int_fast16_t)TJpgD::JDR_INP;	/* Err: read error or wrong stream termination */
-			} else {
-				++dp;	/* Next data ptr */
+				dpend = dp + jd->infunc(jd, dp, TJPGD_SZBUF);
+				if (dp == dpend) return 0 - (int_fast16_t)TJpgD::JDR_INP;	/* Err: read error or wrong stream termination */
 			}
-			--dc;		/* Decrement number of available bytes */
-			if (!msk) {		/* Not in flag sequence? */
-				msk = 8;		/* Read from MSB */
-				s = *dp;				/* Get next data byte */
-				if (s == 0xFF) {		/* Is start of flag sequence? */
-					goto huffext_goto;	/* Enter flag sequence, get trailing byte */
+			s = *dp;				/* Get next data byte */
+			if (s == 0xFF) {		/* Is start of flag sequence? */
+				if (++dp == dpend) {			/* No input data is available, re-fill input buffer */
+					dp = jd->inbuf;	/* Top of input buffer */
+					dpend = dp + jd->infunc(jd, dp, TJPGD_SZBUF);
+					if (dp == dpend) return 0 - (int_fast16_t)TJpgD::JDR_INP;	/* Err: read error or wrong stream termination */
 				}
-			} else {			/* Exit flag sequence */
 				if (*dp != 0) return 0 - (int_fast16_t)TJpgD::JDR_FMT1;	/* Err: unexpected flag is detected (may be collapted data) */
-				*dp = s = 0xFF;			/* The flag is a data 0xFF */
+				*dp = s;			/* The flag is a data 0xFF */
 			}
 		}
-		v = (v << 1) | ((s >> (--msk)) & 1);	/* Get a bit */
-
-		for (nd = *++hbits; nd; --nd) {	/* Search the code word in this bit length */
-			++hdata;
-			if (v == *++hcode) {		/* Matched? */
-				jd->dmsk = msk; jd->dctr = dc; jd->dptr = dp;
-				return *hdata;			/* Return the decoded data */
+		do {
+			v = (v << 1) | ((s >> (--msk)) & 1);	/* Get a bit */
+			for (nd = *++hbits; nd; --nd) {	/* Search the code word in this bit length */
+				++hdata;
+				if (v == *++hcode) {		/* Matched? */
+					jd->dmsk = msk; jd->dptr = dp; jd->dpend = dpend;
+					return *hdata;			/* Return the decoded data */
+				}
 			}
-		}
-	} while (--bl);
-
-	return 0 - (int_fast16_t)TJpgD::JDR_FMT1;	/* Err: code not found (may be collapted data) */
+			if (!--bl) return 0 - (int_fast16_t)TJpgD::JDR_FMT1;	/* Err: code not found (may be collapted data) */
+		} while (msk);
+	}
 }
 
 
@@ -641,26 +635,22 @@ static TJpgD::JRESULT restart (
 	uint_fast16_t rstn	/* Expected restert sequense number */
 )
 {
-	uint_fast16_t dc;
 	uint_fast16_t d;
-	uint8_t *dp;
+	uint8_t *dp, *dpend;
 
 
 	/* Discard padding bits and get two bytes from the input stream */
-	dp = jd->dptr; dc = jd->dctr;
+	dp = jd->dptr; dpend = jd->dpend;
 	d = 0;
 	for (size_t i = 0; i < 2; i++) {
-		if (!dc) {	/* No input data is available, re-fill input buffer */
+		if (++dp == dpend) {	/* No input data is available, re-fill input buffer */
 			dp = jd->inbuf;
-			dc = jd->infunc(jd, dp, TJPGD_SZBUF);
-			if (!dc) return TJpgD::JDR_INP;
-		} else {
-			dp++;
+			dpend = dp + jd->infunc(jd, dp, TJPGD_SZBUF);
+			if (dp == dpend) return TJpgD::JDR_INP;
 		}
-		dc--;
 		d = (d << 8) | *dp;	/* Get a byte */
 	}
-	jd->dptr = dp; jd->dctr = dc; jd->dmsk = 0;
+	jd->dptr = dp; jd->dpend = dpend; jd->dmsk = 0;
 
 	/* Check the marker */
 	if ((d & 0xFFD8) != 0xFFD0 || (d & 7) != (rstn & 7)) {
@@ -706,7 +696,7 @@ TJpgD::JRESULT TJpgD::prepare (
 	inbuf = seg = dptr = (uint8_t*)alloc_pool(this, TJPGD_SZBUF);		/* Allocate stream input buffer */
 	if (!seg) return TJpgD::JDR_MEM1;
 
-	dctr = infunc(this, dptr, TJPGD_SZBUF);
+	uint32_t dctr = infunc(this, dptr, TJPGD_SZBUF);
 	seg = dptr;
 	if (dctr <= 2) return TJpgD::JDR_INP;/* Check SOI marker */
 	if (LDB_WORD(seg) != 0xFFD8) return TJpgD::JDR_FMT1;	/* Err: SOI is not detected */
@@ -799,6 +789,7 @@ TJpgD::JRESULT TJpgD::prepare (
 			/* Allocate working buffer for MCU and RGB */
 			if (!msy || !msx) return TJpgD::JDR_FMT1;					/* Err: SOF0 has not been loaded */
 			dmsk = 0;
+			dpend = dptr + dctr;
 			--dptr;
 
 			return TJpgD::JDR_OK;		/* Initialization succeeded. Ready to decompress the JPEG image. */
