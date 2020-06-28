@@ -248,7 +248,7 @@ private:
       h = me->_lcd_height - (me->_jpg_y + outY);
     }
 
-    me->_lcd->pushPixelsDMA(me->_dmabuf, me->_out_width * h * 2);
+    me->_lcd->pushPixelsDMA(me->_dmabuf, me->_out_width * h);
 
     flip = !flip;
     me->_dmabuf = me->_dmabufs[flip];
