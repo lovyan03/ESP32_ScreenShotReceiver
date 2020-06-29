@@ -5,14 +5,19 @@ using System.Drawing.Imaging;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows.Forms;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace ScreenShotSender
 {
     public partial class FormSenderMain : Form
     {
+        CancellationTokenSource _cts;
+        Task _task;
         FormCaptureBox formCaptureBox = new FormCaptureBox();
         ImageCodecInfo _jpgEncoder = null;
         Bitmap _resizeBmp;
+        Bitmap _bmp;
         Graphics _gResizeBmp;
         EncoderParameters _encParams = new EncoderParameters(1);
         List<TextBox> _tbHosts = new List<TextBox>();
@@ -21,15 +26,24 @@ namespace ScreenShotSender
         int _port = 63333;
         System.Diagnostics.Stopwatch _sw;
         Rectangle dstRect;
+        int colcount = 1;
+        int rowcount = 1;
+        int _width = 160;
+        int _height = 120;
 
         public FormSenderMain()
         {
             InitializeComponent();
+
+            _sw = new System.Diagnostics.Stopwatch();
+            _cts = new CancellationTokenSource();
+            _task = Task.Run(() => { TaskMain(_cts.Token); });
         }
 
         private void FormSenderMain_FormClosed(object sender, FormClosedEventArgs e)
         {
             stop();
+            _cts?.Cancel();
         }
 
 
@@ -48,8 +62,6 @@ namespace ScreenShotSender
             var dpiX = GetDeviceCaps(dc, LOGPIXELSX);
             var dpiY = GetDeviceCaps(dc, LOGPIXELSY);
             ReleaseDC(IntPtr.Zero, dc);
-
-            _sw = new System.Diagnostics.Stopwatch();
 
             foreach (ImageCodecInfo ici in ImageCodecInfo.GetImageEncoders()) {
                 if (ici.FormatID == ImageFormat.Jpeg.Guid) {
@@ -162,45 +174,54 @@ namespace ScreenShotSender
 
         private void timer1_Tick(object sender, EventArgs e)
         {
-            timer1.Enabled = false;
-
             var bmp = formCaptureBox.CaptureFrame();
-            pbPreview.Image = bmp; //  _resizeBmp;
-            pbPreview.Invalidate();
+            pbPreview.Image = bmp;
+            _bmp = (Bitmap)bmp.Clone();
 
-            if (_resizeBmp == null || _resizeBmp.Width != nudWidth.Value || _resizeBmp.Height != nudHeight.Value)
-            {
-                _gResizeBmp?.Dispose();
-                _resizeBmp?.Dispose();
-                _resizeBmp = new Bitmap((int)nudWidth.Value, (int)nudHeight.Value, System.Drawing.Imaging.PixelFormat.Format24bppRgb);
-                _gResizeBmp = Graphics.FromImage(_resizeBmp);
-                _gResizeBmp.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.HighSpeed;
-            }
-
-            dstRect.Width = (int)nudWidth.Value;
-            dstRect.Height = (int)nudHeight.Value;
-
-            int idx = 0;
-            float y = 0;
-            float wid = bmp.Width / (float)nudCol.Value;
-            float hei = bmp.Height / (float)nudRow.Value;
-            for (int row = 0; row < nudRow.Value; row++)
-            {
-                float x = 0;
-                for (int col = 0; col < nudCol.Value; col++)
-                {
-                    _gResizeBmp.DrawImage(bmp, dstRect, x, y, wid, hei, GraphicsUnit.Pixel);
-                    x += wid;
-                    if (_sw.IsRunning)  tcpJPGPrepare(_resizeBmp, _tcps[idx]);
-                    idx++;
-                }
-                y += hei;
-            }
-
-            timer1.Enabled = true;
+            _width = (int)nudWidth.Value;
+            _height = (int)nudHeight.Value;
+            colcount = (int)nudCol.Value;
+            rowcount = (int)nudRow.Value;
         }
 
-        private void tcpJPGPrepare(Bitmap bmp, TCPSender tcp)
+        private void TaskMain(CancellationToken ct)
+        {
+            while (!ct.IsCancellationRequested)
+            {
+                if (!_sw.IsRunning || _bmp == null) continue;
+
+                dstRect.Width = _width;
+                dstRect.Height = _height;
+                float wid = _bmp.Width / (float)colcount;
+                float hei = _bmp.Height / (float)rowcount;
+
+                if (_resizeBmp == null || _resizeBmp.Width != _width || _resizeBmp.Height != _height)
+                {
+                    _gResizeBmp?.Dispose();
+                    _resizeBmp?.Dispose();
+                    _resizeBmp = new Bitmap(_width, _height, System.Drawing.Imaging.PixelFormat.Format24bppRgb);
+                    _gResizeBmp = Graphics.FromImage(_resizeBmp);
+                    _gResizeBmp.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.HighSpeed;
+                }
+
+                int idx = 0;
+                float y = 0;
+                for (int row = 0; row < rowcount; row++)
+                {
+                    float x = 0;
+                    for (int col = 0; col < colcount; col++)
+                    {
+                        _gResizeBmp.DrawImage(_bmp, dstRect, x, y, wid, hei, GraphicsUnit.Pixel);
+                        x += wid;
+                        if (_sw.IsRunning) tcpJPGPrepare(_resizeBmp, _tcps[idx]);
+                        idx++;
+                    }
+                    y += hei;
+                }
+            }
+        }
+
+            private void tcpJPGPrepare(Bitmap bmp, TCPSender tcp)
         {
             using (MemoryStream ms = new MemoryStream())
             {

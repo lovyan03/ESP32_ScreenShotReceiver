@@ -37,7 +37,7 @@ If there is more than one receiver, you can split the image by increasing the nu
 Ctrlキー ＋ カーソルキー操作 : ウィンドウの移動距離が増えます。  
 Shiftキー ＋ カーソルキー操作 : ウィンドウの幅と高さが調整できます。  
   
-The capture window can be moved and resized using the mouse and the keyboard cursor keys. 
+The capture window can be moved and resized using the mouse and the keyboard cursor keys.  
 hold down the Ctrl key and use the cursor keys : Increase the move distance.  
 Hold down the Shift key and use the cursor keys : Adjust the width and height.  
 

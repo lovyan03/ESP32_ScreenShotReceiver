@@ -30,6 +30,7 @@ namespace ScreenShotSender
 
         private Bitmap _bmp;
         private Point _mousePos;
+        private Point _upperLeftDestination = new Point(0, 0);
 
         protected override bool ShowWithoutActivation => true;
         protected override CreateParams CreateParams
@@ -95,12 +96,12 @@ namespace ScreenShotSender
             }
             var g = Graphics.FromImage(_bmp);
             var upperLeftSource = this.Location;
-            var upperLeftDestination = new Point(0, 0);
             g.CopyFromScreen( upperLeftSource
-                            , upperLeftDestination
+                            , _upperLeftDestination
                             , this.Size
                             , CopyPixelOperation.SourceCopy
                             );
+            Cursor.DrawStretched(g, new Rectangle(Control.MousePosition.X - Left , Control.MousePosition.Y - Top, Cursor.Size.Width, Cursor.Size.Height));
             return _bmp;
         }
 

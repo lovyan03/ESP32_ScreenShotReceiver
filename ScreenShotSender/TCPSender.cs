@@ -34,7 +34,8 @@ namespace ScreenShotSender
 
         public void setData(byte[] src)
         {
-            _sendBuffer = src;
+//            _sendBuffer = src;
+            Interlocked.Exchange(ref _sendBuffer, src);
         }
 
         private void TaskClient(CancellationToken ct)
@@ -62,7 +63,12 @@ namespace ScreenShotSender
                                  && resBytes[1] == 0x50
                                  && resBytes[2] == 0x47
                                  && resBytes[3] == 0x0A) {
-                                    var tmp = _sendBuffer;
+//                                    byte[] tmp = _sendBuffer;
+                                    byte[] tmp = null;
+                                    do {
+                                        tmp = Interlocked.Exchange(ref _sendBuffer, null);
+                                    } while (null == tmp);
+                                    //*/
                                     ns.Write(tmp, 0, tmp.Length);
                                 }
                                 else
