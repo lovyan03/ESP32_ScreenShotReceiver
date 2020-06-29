@@ -1,4 +1,16 @@
-#pragma GCC optimize ("O3")
+/*----------------------------------------------------------------------------/
+  ESP32 ScreenShotReceiver  
+
+Original Source:  
+ https://github.com/lovyan03/ESP32_ScreenShotReceiver/  
+
+Licence:  
+ [MIT](https://github.com/lovyan03/ESP32_ScreenShotReceiver/blob/master/LICENSE)  
+
+Author:  
+ [lovyan03](https://twitter.com/lovyan03)  
+
+/----------------------------------------------------------------------------*/
 
 #if defined(ARDUINO_M5Stack_Core_ESP32) || defined(ARDUINO_M5STACK_FIRE)
 #include <M5StackUpdater.h>     // https://github.com/tobozo/M5Stack-SD-Updater/

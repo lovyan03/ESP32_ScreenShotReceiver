@@ -145,15 +145,6 @@ inline uint_fast8_t BYTECLIP (
 #endif
 
 
-
-/*----------------------------------*/
-/* Convert rgb24 to rgb565 with DMA */
-/*----------------------------------*/
-
-#define dma565Color(r, g, b) \
-        ( ((b >> 3) << 8) | ((g >> 2) << 13) | ((g >> 5) | ((r>>3)<<3)))
-
-
 /*-----------------------------------------------------------------------*/
 /* Allocate a memory block from memory pool                              */
 /*-----------------------------------------------------------------------*/
@@ -585,7 +576,6 @@ static TJpgD::JRESULT mcu_output (
 
 	/* Build an RGB MCU from discrete comopnents */
 	rgb16 = (uint16_t*)workbuf;
-	uint_fast8_t r,g,b;
 	const int8_t* btbase = Bayer[jd->bayer];
 	const int8_t* btbl;
 	uint_fast8_t ixshift = (mx == 16);
@@ -598,17 +588,40 @@ static TJpgD::JRESULT mcu_output (
 		ix = 0;
 		do {
 			do {
-				yy = btbl[ix & 3] + py[ix];			/* Get Y component */
-				size_t idx = ix >> ixshift;
+				uint_fast16_t idx = ix >> ixshift;
 				cb = (pc[idx] - 128); 	/* Get Cb/Cr component and restore right level */
 				cr = (pc[idx + 64] - 128);
 
 				/* Convert YCbCr to RGB */
-				r = BYTECLIP(yy + (((int32_t)(1.402   * 256) * cr) >> 8));
-				g = BYTECLIP(yy - (((int32_t)(0.34414 * 256) * cb
-								  + (int32_t)(0.71414 * 256) * cr) >> 8));
-				b = BYTECLIP(yy + (((int32_t)(1.772   * 256) * cb) >> 8));
-				rgb16[ix] = dma565Color(r, g, b);
+				uint_fast16_t rr = ((int32_t)(1.402   * 256) * cr) >> 8;
+				uint_fast16_t gg = ((int32_t)(0.34414 * 256) * cb
+								  + (int32_t)(0.71414 * 256) * cr) >> 8;
+				uint_fast16_t bb = ((int32_t)(1.772   * 256) * cb) >> 8;
+
+				yy = btbl[ix & 3] + py[ix];			/* Get Y component */
+				uint_fast8_t r8 = BYTECLIP(yy + rr) & 0xF8;
+				uint_fast8_t g6 = BYTECLIP(yy - gg) >> 2;
+				uint_fast8_t b5 = BYTECLIP(yy + bb) >> 3;
+
+				rgb16[ix] = r8 | g6 >> 3 | (g6 << 5 | b5) << 8;
+
+				++ix;
+
+				if (!ixshift) {
+					cb = (pc[ix] - 128); 	/* Get Cb/Cr component and restore right level */
+					cr = (pc[ix + 64] - 128);
+					rr = ((int32_t)(1.402   * 256) * cr) >> 8;
+					gg = ((int32_t)(0.34414 * 256) * cb
+						+ (int32_t)(0.71414 * 256) * cr) >> 8;
+					bb = ((int32_t)(1.772   * 256) * cb) >> 8;
+				}
+				yy = btbl[ix & 3] + py[ix];			/* Get Y component */
+				r8 = BYTECLIP(yy + rr) & 0xF8;
+				g6 = BYTECLIP(yy - gg) >> 2;
+				b5 = BYTECLIP(yy + bb) >> 3;
+
+				rgb16[ix] = r8 | g6 >> 3 | (g6 << 5 | b5) << 8;
+
 			} while (++ix & 7);
 			py += 64 - 8;	/* Jump to next block if double block heigt */
 		} while (ix != mx);
