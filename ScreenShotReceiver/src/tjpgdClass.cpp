@@ -686,7 +686,7 @@ TJpgD::JRESULT TJpgD::prepare (
 	uint_fast16_t i, len;
 	TJpgD::JRESULT rc;
 
-	static constexpr uint_fast16_t sz_pool = 3100;
+	static constexpr uint_fast16_t sz_pool = 3900;
 	static uint8_t pool[sz_pool];
 
 
