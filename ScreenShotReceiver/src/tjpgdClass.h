@@ -59,7 +59,7 @@ struct TJpgD {
 	uint_fast16_t nrst;			/* Restart inverval */
 	int32_t width, height;		/* Size of the input image (pixel) */
 	uint8_t* huffbits[2][2];	/* Huffman bit distribution tables [id][dcac] */
-	uint16_t* huffcode[2][2];	/* Huffman code word tables [id][dcac] */
+	uint_fast16_t* huffcode[2][2];	/* Huffman code word tables [id][dcac] */
 	uint8_t* huffdata[2][2];	/* Huffman decoded data tables [id][dcac] */
 	int32_t* qttbl[4];			/* Dequantizer tables [id] */
 	void* pool;					/* Pointer to available memory pool */

@@ -224,7 +224,7 @@ static int create_huffman_tbl (	/* 0:OK, !0:Failed */
 {
 	uint_fast16_t d, b, np, cls, num, hc;
 	uint8_t *pb, *pd;
-	uint16_t *ph;
+	uint_fast16_t *ph;
 
 
 	do {	/* Process all tables in the segment */
@@ -239,7 +239,7 @@ static int create_huffman_tbl (	/* 0:OK, !0:Failed */
 			np += (pb[i] = data[i]);		/* Get sum of code words for each code */
 		}
 
-		ph = (uint16_t*)alloc_pool(jd, (np * sizeof (uint16_t)));/* Allocate a memory block for the code word table */
+		ph = (uint_fast16_t*)alloc_pool(jd, (np * sizeof (uint_fast16_t)));/* Allocate a memory block for the code word table */
 		if (!ph) return TJpgD::JDR_MEM1;			/* Err: not enough memory */
 		jd->huffcode[num][cls] = ph - 1;
 		hc = 0;
@@ -318,7 +318,7 @@ static int_fast16_t bitext (	/* >=0: extracted data, <0: error code */
 static int_fast16_t huffext (	/* >=0: decoded data, <0: error code */
 	TJpgD* jd,				/* Pointer to the decompressor object */
 	const uint8_t* hbits,	/* Pointer to the bit distribution table */
-	const uint16_t* hcode,	/* Pointer to the code word table */
+	const uint_fast16_t* hcode,	/* Pointer to the code word table */
 	const uint8_t* hdata	/* Pointer to the data table */
 )
 {
@@ -351,9 +351,12 @@ static int_fast16_t huffext (	/* >=0: decoded data, <0: error code */
 		}
 		do {
 			v = (v << 1) | ((s >> (--msk)) & 1);	/* Get a bit */
-			for (nd = *++hbits; nd; --nd) {	/* Search the code word in this bit length */
-				++hdata;
-				if (v == *++hcode) {		/* Matched? */
+			nd = *++hbits;
+			if (nd) {
+				do {		/* Search the code word in this bit length */
+					++hdata;
+				} while (v != *++hcode && --nd);	/* Matched? */
+				if (nd) {		/* Matched? */
 					jd->dmsk = msk; jd->dptr = dp; jd->dpend = dpend;
 					return *hdata;			/* Return the decoded data */
 				}
@@ -494,7 +497,7 @@ static TJpgD::JRESULT mcu_load (
 	int_fast16_t b, d, e;
 	uint_fast8_t blk, nby, nbc, i, z;
 	const uint8_t *hb, *hd;
-	const uint16_t *hc;
+	const uint_fast16_t *hc;
 
 	nby = jd->msx * jd->msy;	/* Number of Y blocks (1, 2 or 4) */
 	nbc = 2;					/* Number of C blocks (2) */
