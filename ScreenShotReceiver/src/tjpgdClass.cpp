@@ -271,8 +271,7 @@ static int_fast16_t bitext (	/* >=0: extracted data, <0: error code */
 
 	do {
 		if (!msk) {				/* Next byte? */
-			msk = 8;		/* Read from MSB */
-								/* Next data ptr */
+			msk = 8;			/* Read from MSB */
 			if (++dp == dpend) {			/* No input data is available, re-fill input buffer */
 				dp = jd->inbuf;	/* Top of input buffer */
 				jd->dpend = dpend = dp + jd->infunc(jd, dp, TJPGD_SZBUF);
@@ -291,7 +290,7 @@ static int_fast16_t bitext (	/* >=0: extracted data, <0: error code */
 		}
 		shift = msk < nbit ? msk : nbit;
 		msk -= shift;
-		v = (v << shift) | ((s >> msk) & ((1 << shift) - 1));	/* Get a bit */
+		v = (v << shift) | ((s >> msk) & ((1 << shift) - 1));	/* Get bits */
 	} while (nbit -= shift);
 	jd->dmsk = msk; jd->dptr = dp;
 
@@ -312,17 +311,16 @@ static int_fast16_t huffext (	/* >=0: decoded data, <0: error code */
 	const uint8_t* hdata	/* Pointer to the data table */
 )
 {
-	uint_fast8_t msk, s, bl, nd;
 	uint8_t *dp, *dpend;
+	uint_fast8_t msk, s, bl;
 	uint_fast16_t v;
 
 	msk = jd->dmsk; dp = jd->dptr; dpend = jd->dpend;	/* Bit mask, number of data available, read ptr */
 	s = *dp; v = 0;
 	bl = 16;	/* Max code length */
 	do {
-		if (!msk) {		/* Next byte? */
-			msk = 8;		/* Read from MSB */
-								/* Next data ptr */
+		if (!msk) {				/* Next byte? */
+			msk = 8;			/* Read from MSB */
 			if (++dp == dpend) {			/* No input data is available, re-fill input buffer */
 				dp = jd->inbuf;	/* Top of input buffer */
 				jd->dpend = dpend = dp + jd->infunc(jd, dp, TJPGD_SZBUF);
@@ -341,14 +339,14 @@ static int_fast16_t huffext (	/* >=0: decoded data, <0: error code */
 		}
 		do {
 			v = (v << 1) | ((s >> (--msk)) & 1);	/* Get a bit */
-			nd = *++hbits;
+			uint_fast8_t nd = *++hbits;
 			if (nd) {
-				do {		/* Search the code word in this bit length */
+				do {
 					++hdata;
-				} while (v != *++hcode && --nd);	/* Matched? */
-				if (nd) {		/* Matched? */
+				} while (v != *++hcode && --nd);	/* Search the code word in this bit length */
+				if (nd) {							/* Matched? */
 					jd->dmsk = msk; jd->dptr = dp;
-					return *hdata;			/* Return the decoded data */
+					return *hdata;					/* Return the decoded data */
 				}
 			}
 		} while (msk && --bl);
@@ -561,7 +559,6 @@ static TJpgD::JRESULT mcu_output (
 )
 {
 	uint_fast16_t ix, iy, mx, my, rx, ry;
-	int32_t yy, cb, cr;
 	uint8_t *py, *pc;
 	TJpgD::JRECT rect;
 
@@ -587,17 +584,17 @@ static TJpgD::JRESULT mcu_output (
 		do {
 			do {
 				uint_fast16_t idx = ix >> ixshift;
-				cb = (pc[idx] - 128); 	/* Get Cb/Cr component and restore right level */
-				cr = (pc[idx + 64] - 128);
+				int32_t cb = (pc[idx] - 128); 	/* Get Cb/Cr component and restore right level */
+				int32_t cr = (pc[idx + 64] - 128);
 
 				/* Convert CbCr to RGB */
-				uint_fast16_t rr = ((int32_t)(1.402   * 256) * cr) >> 8;
-				uint_fast16_t gg = ((int32_t)(0.34414 * 256) * cb
-								  + (int32_t)(0.71414 * 256) * cr) >> 8;
-				uint_fast16_t bb = ((int32_t)(1.772   * 256) * cb) >> 8;
+				int32_t rr = ((int32_t)(1.402   * 256) * cr) >> 8;
+				int32_t gg = ((int32_t)(0.34414 * 256) * cb
+							+ (int32_t)(0.71414 * 256) * cr) >> 8;
+				int32_t bb = ((int32_t)(1.772   * 256) * cb) >> 8;
 
 				do {
-					yy = btbl[ix & 3] + py[ix];			/* Get Y component */
+					int32_t yy = btbl[ix & 3] + py[ix];			/* Get Y component */
 					uint_fast8_t r8 = BYTECLIP(yy + rr) & 0xF8;
 					uint_fast8_t g6 = BYTECLIP(yy - gg) >> 2;
 					uint_fast8_t b5 = BYTECLIP(yy + bb) >> 3;
