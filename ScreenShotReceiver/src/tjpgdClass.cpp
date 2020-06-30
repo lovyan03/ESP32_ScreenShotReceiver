@@ -18,8 +18,7 @@
 / Sep 03, 2012 R0.01b Added JD_TBLCLIP option.
 / Mar 16, 2019 R0.01c Supprted stdint.h.
 /----------------------------------------------------------------------------/
-/  modify by lovyan03
-/ May 29, 2019 Tweak for ESP32
+/ May 2019 ～ June 2020  Tweak for ESP32 ( modify by lovyan03 )
 /----------------------------------------------------------------------------*/
 
 #pragma GCC optimize ("O3")
@@ -320,7 +319,7 @@ static int_fast16_t huffext (	/* >=0: decoded data, <0: error code */
 	msk = jd->dmsk; dp = jd->dptr; dpend = jd->dpend;	/* Bit mask, number of data available, read ptr */
 	s = *dp; v = 0;
 	bl = 16;	/* Max code length */
-	for (;;) {
+	do {
 		if (!msk) {		/* Next byte? */
 			msk = 8;		/* Read from MSB */
 								/* Next data ptr */
@@ -352,9 +351,10 @@ static int_fast16_t huffext (	/* >=0: decoded data, <0: error code */
 					return *hdata;			/* Return the decoded data */
 				}
 			}
-			if (!--bl) return 0 - (int_fast16_t)TJpgD::JDR_FMT1;	/* Err: code not found (may be collapted data) */
-		} while (msk);
-	}
+		} while (msk && --bl);
+	} while (bl);
+
+	return 0 - (int_fast16_t)TJpgD::JDR_FMT1;	/* Err: code not found (may be collapted data) */
 }
 
 
@@ -534,7 +534,7 @@ static TJpgD::JRESULT mcu_load (
 				z = ZIG(i);						/* Zigzag-order to raster-order converted index */
 				tmp[z] = d * dqf[z] >> 8;		/* De-quantize, apply scale factor of Arai algorithm and descale 8 bits */
 			}
-		} while (++i < 64);		/* Next AC element */
+		} while (++i != 64);		/* Next AC element */
 
 		block_idct(tmp, bp);		/* Apply IDCT and store the block to the MCU buffer */
 
@@ -560,11 +560,9 @@ static TJpgD::JRESULT mcu_output (
 	uint_fast16_t y		/* MCU position in the image (top of the MCU) */
 )
 {
-//	const int16_t CVACC = (sizeof (int16_t) > 2) ? 1024 : 128;
 	uint_fast16_t ix, iy, mx, my, rx, ry;
 	int32_t yy, cb, cr;
 	uint8_t *py, *pc;
-	uint16_t *rgb16;
 	TJpgD::JRECT rect;
 
 	mx = jd->msx * 8; my = jd->msy * 8;					/* MCU size (pixel) */
@@ -575,13 +573,13 @@ static TJpgD::JRESULT mcu_output (
 	rect.top = y; rect.bottom = y + ry - 1;
 
 	/* Build an RGB MCU from discrete comopnents */
-	rgb16 = (uint16_t*)workbuf;
 	const int8_t* btbase = Bayer[jd->bayer];
 	const int8_t* btbl;
 	uint_fast8_t ixshift = (mx == 16);
 	uint_fast8_t iyshift = (my == 16);
 	iy = 0;
 	do {
+		auto rgb16 = &((uint16_t*)workbuf)[mx * iy];
 		btbl = btbase + ((iy & 3) << 2);
 		py = &mcubuf[((iy & 8) + iy) << 3];
 		pc = &mcubuf[((mx << iyshift) + (iy >> iyshift)) << 3];
@@ -592,40 +590,22 @@ static TJpgD::JRESULT mcu_output (
 				cb = (pc[idx] - 128); 	/* Get Cb/Cr component and restore right level */
 				cr = (pc[idx + 64] - 128);
 
-				/* Convert YCbCr to RGB */
+				/* Convert CbCr to RGB */
 				uint_fast16_t rr = ((int32_t)(1.402   * 256) * cr) >> 8;
 				uint_fast16_t gg = ((int32_t)(0.34414 * 256) * cb
 								  + (int32_t)(0.71414 * 256) * cr) >> 8;
 				uint_fast16_t bb = ((int32_t)(1.772   * 256) * cb) >> 8;
 
-				yy = btbl[ix & 3] + py[ix];			/* Get Y component */
-				uint_fast8_t r8 = BYTECLIP(yy + rr) & 0xF8;
-				uint_fast8_t g6 = BYTECLIP(yy - gg) >> 2;
-				uint_fast8_t b5 = BYTECLIP(yy + bb) >> 3;
-
-				rgb16[ix] = r8 | g6 >> 3 | (g6 << 5 | b5) << 8;
-
-				++ix;
-
-				if (!ixshift) {
-					cb = (pc[ix] - 128); 	/* Get Cb/Cr component and restore right level */
-					cr = (pc[ix + 64] - 128);
-					rr = ((int32_t)(1.402   * 256) * cr) >> 8;
-					gg = ((int32_t)(0.34414 * 256) * cb
-						+ (int32_t)(0.71414 * 256) * cr) >> 8;
-					bb = ((int32_t)(1.772   * 256) * cb) >> 8;
-				}
-				yy = btbl[ix & 3] + py[ix];			/* Get Y component */
-				r8 = BYTECLIP(yy + rr) & 0xF8;
-				g6 = BYTECLIP(yy - gg) >> 2;
-				b5 = BYTECLIP(yy + bb) >> 3;
-
-				rgb16[ix] = r8 | g6 >> 3 | (g6 << 5 | b5) << 8;
-
-			} while (++ix & 7);
+				do {
+					yy = btbl[ix & 3] + py[ix];			/* Get Y component */
+					uint_fast8_t r8 = BYTECLIP(yy + rr) & 0xF8;
+					uint_fast8_t g6 = BYTECLIP(yy - gg) >> 2;
+					uint_fast8_t b5 = BYTECLIP(yy + bb) >> 3;
+					rgb16[ix] = r8 | g6 >> 3 | (g6 << 5 | b5) << 8;
+				} while (++ix & ixshift);
+			} while (ix & 7);
 			py += 64 - 8;	/* Jump to next block if double block heigt */
 		} while (ix != mx);
-		rgb16 += mx;
 	} while (++iy != my);
 
 	if (rx < mx) {
