@@ -373,21 +373,6 @@ static void block_idct (
 
 	/* Process columns */
 	for (size_t i = 0; i < 8; ++i) {
-		/* Get and Process the odd elements */
-		v4 = src[8 * 7];
-		v5 = src[8 * 1];
-		v6 = src[8 * 5];
-		v7 = src[8 * 3];
-
-		t10 = v5 - v4;
-		t11 = v5 + v4;
-		t12 = v6 - v7;
-		v7 += v6;
-		v5 = (t11 - v7) * M13 >> 8;
-		t13 = (t10 + t12) * M5 >> 8;
-		v6 = t13 - ((t12 * M4 >> 8) + (v7 += t11));
-		v4 = t13 - ((t10 * M2 >> 8) + (v5 -= v6));
-
 		/* Get and Process the even elements */
 		v0 = src[8 * 0];
 		v2 = src[8 * 4];
@@ -405,6 +390,21 @@ static void block_idct (
 		v1 = t12 + t11;
 		v2 = t12 - t11;
 
+		/* Get and Process the odd elements */
+		v4 = src[8 * 7];
+		v5 = src[8 * 1];
+		v6 = src[8 * 5];
+		v7 = src[8 * 3];
+
+		t10 = v5 - v4;
+		t11 = v5 + v4;
+		t12 = v6 - v7;
+		v7 += v6;
+		v5 = (t11 - v7) * M13 >> 8;
+		t13 = (t10 + t12) * M5 >> 8;
+		v6 = t13 - ((t12 * M4 >> 8) + (v7 += t11));
+		v4 = t13 - ((t10 * M2 >> 8) + (v5 -= v6));
+
 		/* Write-back transformed values */
 		src[8 * 0] = v0 + v7;
 		src[8 * 7] = v0 - v7;
@@ -421,23 +421,6 @@ static void block_idct (
 	/* Process rows */
 	src -= 8;
 	for (size_t i = 0; i < 8; ++i) {
-		/* Get and Process the odd elements */
-		v4 = src[7];
-		v5 = src[1];
-		v6 = src[5];
-		v7 = src[3];
-		t10 = v5 - v4;
-		t11 = v5 + v4;
-		t12 = v6 - v7;
-		v7 += v6;
-		v5 = (t11 - v7) * M13 >> 8;
-		v7 += t11;
-		t13 = (t10 + t12) * M5 >> 8;
-		v6 = t13 - ((t12 * M4 >> 8) + v7);
-		v4 = t13 - (t10 * M2 >> 8);
-		v5 -= v6;
-		v4 -= v5;
-
 		/* Get and Process the even elements */
 		v0 = src[0] + (128L << 8);	/* remove DC offset (-128) here */
 		v2 = src[4];
@@ -454,6 +437,23 @@ static void block_idct (
 		v3 = t10 - v3;
 		v1 = t12 + t11;
 		v2 = t12 - t11;
+
+		/* Get and Process the odd elements */
+		v4 = src[7];
+		v5 = src[1];
+		v6 = src[5];
+		v7 = src[3];
+		t10 = v5 - v4;
+		t11 = v5 + v4;
+		t12 = v6 - v7;
+		v7 += v6;
+		v5 = (t11 - v7) * M13 >> 8;
+		v7 += t11;
+		t13 = (t10 + t12) * M5 >> 8;
+		v6 = t13 - ((t12 * M4 >> 8) + v7);
+		v4 = t13 - (t10 * M2 >> 8);
+		v5 -= v6;
+		v4 -= v5;
 
 		/* Descale the transformed values 8 bits and output */
 		dst[0] = BYTECLIP((v0 + v7) >> 8);
@@ -492,8 +492,8 @@ static TJpgD::JRESULT mcu_load (
 	nbc = 2;					/* Number of C blocks (2) */
 
 	for (blk = 0; blk < nby + nbc; blk++) {
-		size_t cmp = (blk < nby) ? 0 : blk - nby + 1;	/* Component number 0:Y, 1:Cb, 2:Cr */
-		size_t id = cmp ? 1 : 0;						/* Huffman table ID of the component */
+		uint_fast8_t cmp = (blk < nby) ? 0 : blk - nby + 1;	/* Component number 0:Y, 1:Cb, 2:Cr */
+		uint_fast8_t id = cmp ? 1 : 0;						/* Huffman table ID of the component */
 
 		/* Extract a DC element from input stream */
 		hb = jd->huffbits[id][0];				/* Huffman table for the DC element */
