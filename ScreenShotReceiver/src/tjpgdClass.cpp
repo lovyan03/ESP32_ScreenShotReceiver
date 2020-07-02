@@ -262,39 +262,47 @@ static int_fast16_t bitext (	/* >=0: extracted data, <0: error code */
 	int_fast16_t nbit		/* Number of bits to extract (1 to 11) */
 )
 {
-	uint8_t *dp, *dpend;
-	uint_fast8_t msk, s, shift;
-	uint_fast16_t v;
+	uint8_t *dp = jd->dptr;	/* Bit mask, number of data available, read ptr */
+	uint_fast8_t s = *dp;
+	uint_fast8_t msk = jd->dmsk;
+	uint_fast16_t v = 0;
 
-	msk = jd->dmsk; dp = jd->dptr; dpend = jd->dpend;	/* Bit mask, number of data available, read ptr */
-	s = *dp; v = 0;
+	if (msk) {
+		if (msk >= nbit) {
+			msk -= nbit;
+			jd->dmsk = msk;
+			return ((s >> msk) & ((1 << nbit) - 1));	/* Get bits */
+		}
+		nbit -= msk;
+		v = (s & ((1 << msk) - 1)) << nbit;	/* Get bits */
+	}
 
-	do {
-		if (!msk) {				/* Next byte? */
-			msk = 8;			/* Read from MSB */
+	uint8_t *dpend = jd->dpend;
+
+	for (;;) {
+		if (++dp == dpend) {			/* No input data is available, re-fill input buffer */
+			dp = jd->inbuf;	/* Top of input buffer */
+			jd->dpend = dpend = dp + jd->infunc(jd, dp, TJPGD_SZBUF);
+			if (dp == dpend) return 0 - (int_fast16_t)TJpgD::JDR_INP;	/* Err: read error or wrong stream termination */
+		}
+		s = *dp;				/* Get next data byte */
+		if (s == 0xFF) {		/* Is start of flag sequence? */
 			if (++dp == dpend) {			/* No input data is available, re-fill input buffer */
 				dp = jd->inbuf;	/* Top of input buffer */
 				jd->dpend = dpend = dp + jd->infunc(jd, dp, TJPGD_SZBUF);
 				if (dp == dpend) return 0 - (int_fast16_t)TJpgD::JDR_INP;	/* Err: read error or wrong stream termination */
 			}
-			s = *dp;				/* Get next data byte */
-			if (s == 0xFF) {		/* Is start of flag sequence? */
-				if (++dp == dpend) {			/* No input data is available, re-fill input buffer */
-					dp = jd->inbuf;	/* Top of input buffer */
-					jd->dpend = dpend = dp + jd->infunc(jd, dp, TJPGD_SZBUF);
-					if (dp == dpend) return 0 - (int_fast16_t)TJpgD::JDR_INP;	/* Err: read error or wrong stream termination */
-				}
-				if (*dp != 0) return 0 - (int_fast16_t)TJpgD::JDR_FMT1;	/* Err: unexpected flag is detected (may be collapted data) */
-				*dp = s;			/* The flag is a data 0xFF */
-			}
+			if (*dp != 0) return 0 - (int_fast16_t)TJpgD::JDR_FMT1;	/* Err: unexpected flag is detected (may be collapted data) */
+			*dp = s;			/* The flag is a data 0xFF */
 		}
-		shift = msk < nbit ? msk : nbit;
-		msk -= shift;
-		v = (v << shift) | ((s >> msk) & ((1 << shift) - 1));	/* Get bits */
-	} while (nbit -= shift);
-	jd->dmsk = msk; jd->dptr = dp;
-
-	return v;
+		if (8 >= nbit) {
+			msk = 8 - nbit;
+			jd->dmsk = msk; jd->dptr = dp;
+			return v | ((s >> msk) & ((1 << nbit) - 1));	/* Get bits */
+		}
+		nbit -= 8;
+		v |= s << nbit;	/* Get bits */
+	}
 }
 
 
