@@ -271,7 +271,7 @@ static int_fast16_t bitext (	/* >=0: extracted data, <0: error code */
 		if (msk >= nbit) {
 			msk -= nbit;
 			jd->dmsk = msk;
-			return ((s >> msk) & ((1 << nbit) - 1));	/* Get bits */
+			return (s >> msk) & ((1 << nbit) - 1);	/* Get bits */
 		}
 		nbit -= msk;
 		v = (s & ((1 << msk) - 1)) << nbit;	/* Get bits */
@@ -346,7 +346,7 @@ static int_fast16_t huffext (	/* >=0: decoded data, <0: error code */
 			}
 		}
 		do {
-			v = (v << 1) | ((s >> (--msk)) & 1);	/* Get a bit */
+			v += v + ((s >> (--msk)) & 1);	/* Get a bit */
 			uint_fast8_t nd = *++hbits;
 			if (nd) {
 				do {
