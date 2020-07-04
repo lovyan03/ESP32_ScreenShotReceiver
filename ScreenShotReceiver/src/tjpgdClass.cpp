@@ -257,7 +257,7 @@ static int create_huffman_tbl (	/* 0:OK, !0:Failed */
 /* Extract N bits from input stream                                      */
 /*-----------------------------------------------------------------------*/
 
-static int_fast16_t bitext (	/* >=0: extracted data, <0: error code */
+static inline int_fast16_t bitext (	/* >=0: extracted data, <0: error code */
 	TJpgD* jd,		/* Pointer to the decompressor object */
 	int_fast16_t nbit		/* Number of bits to extract (1 to 11) */
 )
@@ -298,7 +298,7 @@ static int_fast16_t bitext (	/* >=0: extracted data, <0: error code */
 		if (8 >= nbit) {
 			msk = 8 - nbit;
 			jd->dmsk = msk; jd->dptr = dp;
-			return v | ((s >> msk) & ((1 << nbit) - 1));	/* Get bits */
+			return v + ((s >> msk) & ((1 << nbit) - 1));	/* Get bits */
 		}
 		nbit -= 8;
 		v |= s << nbit;	/* Get bits */
@@ -605,7 +605,7 @@ static TJpgD::JRESULT mcu_output (
 				uint_fast8_t r8 = BYTECLIP(yy + rr) & 0xF8;
 				uint_fast8_t g6 = BYTECLIP(yy - gg) >> 2;
 				uint_fast8_t b5 = BYTECLIP(yy + bb) >> 3;
-				uint32_t rgbtmp = r8 | g6 >> 3 | ((uint8_t)(g6 << 5 | b5)) << 8;
+				uint32_t rgbtmp = r8 | g6 >> 3 | ((uint8_t)(g6 << 5) + b5) << 8;
 				if (ixshift) {
 					++ix;
 					yy = btbl[ix & 3] + py[ix];			/* Get Y component */
