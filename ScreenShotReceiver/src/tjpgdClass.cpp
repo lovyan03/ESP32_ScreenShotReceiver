@@ -911,7 +911,7 @@ static void task_output(void* arg)
 	queue_t* q;
 //Serial.println("task_output start");
 	for (;;) {
-		if (!xQueueReceive(p->sem, &q, -1)) continue;
+		if (!xQueueReceive(p->sem, &q, portMAX_DELAY)) continue;
 		if (!q) break;
 //Serial.printf("task work: X=%d,Y=%d\r\n",q->x,q->y);
 		if (q->h == 0) {
