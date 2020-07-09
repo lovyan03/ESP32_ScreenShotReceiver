@@ -381,15 +381,17 @@ static void block_idct (
 	/* Process columns */
 	for (size_t i = 0; i < 8; ++i) {
 		/* Get and Process the even elements */
+		t12 = src[8 * 0];
+		t10 = src[8 * 4];
+		t10 += t12;
+		t12 = (t12 << 1) - t10;
+
 		t11 = src[8 * 2];
-		t13 = src[8 * 6] + t11;
+		t13 = src[8 * 6];
+		t13 += t11;
 		t11 = (t11 << 1) - t13;
 		t11 = t11 * M13 >> 8;
 		t11 = t11 - t13;
-
-		t12 = src[8 * 0];
-		t10 = src[8 * 4] + t12;
-		t12 = (t12 << 1) - t10;
 
 		v0 = t10 + t13;
 		v3 = t10 - t13;
@@ -397,24 +399,26 @@ static void block_idct (
 		v2 = t12 - t11;
 
 		/* Get and Process the odd elements */
-		t10 = src[8 * 1];
-		t11 = src[8 * 7] + t10;
-		t10 = (t10 << 1) - t11;
+		v4 = src[8 * 1];
+		v5 = src[8 * 7];
+		v5 += v4;
+		v4 = (v4 << 1) - v5;
 
-		v7  = src[8 * 3];
-		t12 = src[8 * 5] - v7;
-		v7 = (v7 << 1) + t12;
-		v7 += t11;
+		v7 = src[8 * 3];
+		v6 = src[8 * 5];
+		v6 -= v7;
+		v7 = (v7 << 1) + v6;
+		v7 += v5;
 
-		t13 = t10 + t12;
-		t13 = t13 * F5;
-		t12 = t12 * M4 >> 8;
-		v6 = t12 + v7;
+		t13 = v4 + v6;
+		t13 *= F5;
+		v6 = v6 * M4 >> 8;
+		v6 += v7;
 		v6 = t13 - v6;
-		t11 = (t11 << 1) - v7;
-		v5 = t11 * M13 >> 8;
+		v5 = (v5 << 1) - v7;
+		v5 = v5 * M13 >> 8;
 		v5 -= v6;
-		v4 = t10 * F2;
+		v4 *= F2;
 		v4 += v5;
 		v4 = t13 - v4;
 
@@ -435,20 +439,20 @@ static void block_idct (
 	src -= 8;
 	for (size_t i = 0; i < 8; ++i) {
 		/* Get and Process the even elements */
-		v0 = src[0] + (128L << 8);	/* remove DC offset (-128) here */
-		v2 = src[4];
-		t10 = v0 + v2;
-		t12 = v0 - v2;
+		t12 = src[0] + (128L << 8);	/* remove DC offset (-128) here */
+		t10 = src[4];
+		t10 += t12;
+		t12 = (t12 << 1) - t10;
 
 		t11 = src[2];
-		v3 = src[6];
-		v3 += t11;
-		t11 = (t11 << 1) - v3;
+		t13 = src[6];
+		t13 += t11;
+		t11 = (t11 << 1) - t13;
 		t11 = t11 * M13 >> 8;
-		t11 -= v3;
+		t11 -= t13;
 
-		v0 = t10 + v3;
-		v3 = t10 - v3;
+		v0 = t10 + t13;
+		v3 = t10 - t13;
 		v1 = t12 + t11;
 		v2 = t12 - t11;
 
@@ -465,14 +469,14 @@ static void block_idct (
 		v7 += v5;
 
 		t13 = v4 + v6;
-		t13 = t13 * F5;
+		t13 *= F5;
 		v6 = v6 * M4 >> 8;
-		v6 = v6 + v7;
+		v6 += v7;
 		v6 = t13 - v6;
 		v5 = (v5 << 1) - v7;
 		v5 = v5 * M13 >> 8;
 		v5 -= v6;
-		v4 = v4 * F2;
+		v4 *= F2;
 		v4 += v5;
 		v4 = t13 - v4;
 
@@ -590,6 +594,11 @@ static TJpgD::JRESULT mcu_output (
 	rect.left = x; rect.right = x + rx - 1;				/* Rectangular area in the frame buffer */
 	rect.top = y; rect.bottom = y + ry - 1;
 
+	static constexpr float frr = 1.402;
+	static constexpr float fgr = 0.71414;
+	static constexpr float fgb = 0.34414;
+	static constexpr float fbb = 1.772;
+
 	/* Build an RGB MCU from discrete comopnents */
 	const int8_t* btbase = Bayer[jd->bayer];
 	const int8_t* btbl;
@@ -606,27 +615,32 @@ static TJpgD::JRESULT mcu_output (
 			do {
 				uint_fast16_t idx = ix >> ixshift;
 				auto prgb = ((uint32_t*)(&rgb16[ix]));
-				int32_t cb = (pc[idx] - 128); 	/* Get Cb/Cr component and restore right level */
-				int32_t cr = (pc[idx + 64] - 128);
+				float cb = (pc[idx] - 128); 	/* Get Cb/Cr component and restore right level */
+				float cr = (pc[idx + 64] - 128);
 
 				/* Convert CbCr to RGB */
-				int32_t rr = ((int32_t)(1.402   * 256) * cr) >> 8;
-				int32_t gg = ((int32_t)(0.34414 * 256) * cb
-							+ (int32_t)(0.71414 * 256) * cr) >> 8;
-				int32_t bb = ((int32_t)(1.772   * 256) * cb) >> 8;
+				int32_t gg = fgb * cb + fgr * cr;
+				int32_t rr = frr * cr;
+				int32_t bb = fbb * cb;
 
 				int32_t yy = btbl[ix & 3] + py[ix];			/* Get Y component */
 				uint_fast8_t r8 = BYTECLIP(yy + rr) & 0xF8;
-				uint_fast8_t g6 = BYTECLIP(yy - gg) >> 2;
+				uint_fast8_t g8 = BYTECLIP(yy - gg);
 				uint_fast8_t b5 = BYTECLIP(yy + bb) >> 3;
-				uint32_t rgbtmp = r8 | g6 >> 3 | ((uint8_t)(g6 << 5) + b5) << 8;
+				r8 |= g8 >> 5;
+				g8 &= 0x1C;
+				b5 = (g8 << 3) + b5;
+				uint32_t rgbtmp = r8 | b5 << 8;
 				if (ixshift) {
 					++ix;
 					yy = btbl[ix & 3] + py[ix];			/* Get Y component */
 					r8 = BYTECLIP(yy + rr) & 0xF8;
-					g6 = BYTECLIP(yy - gg) >> 2;
+					g8 = BYTECLIP(yy - gg);
 					b5 = BYTECLIP(yy + bb) >> 3;
-					rgbtmp |= ( r8 | g6 >> 3 | (g6 << 5 | b5) << 8) << 16;
+					r8 |= g8 >> 5;
+					g8 &= 0x1C;
+					b5 = (g8 << 3) + b5;
+					rgbtmp = rgbtmp | ( r8 | b5 << 8) << 16;
 				}
 				*prgb = rgbtmp;
 			} while (++ix & 7);
