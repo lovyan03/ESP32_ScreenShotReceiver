@@ -70,7 +70,17 @@ static const uint16_t Ipsf[64] = {	/* See also aa_idct.png */
 /* Output bayer pattern table                  */
 /*---------------------------------------------*/
 
-static const int8_t Bayer[8][16] = {
+static const int8_t Bayer[8][32] = {
+	{ 0, 4, 1, 5, 0, 4, 1, 5,-2, 2,-1, 3,-2, 2,-1, 3, 1, 5, 0, 4, 1, 5, 0, 4,-1, 3,-2, 2,-1, 3,-2, 2},
+	{ 1, 5, 0, 4, 1, 5, 0, 4,-1, 3,-2, 2,-1, 3,-2, 2, 0, 4, 1, 5, 0, 4, 1, 5,-2, 2,-1, 3,-2, 2,-1, 3},
+	{ 2,-1, 3,-2, 2,-1, 3,-2, 5, 0, 4, 1, 5, 0, 4, 1, 3,-2, 2,-1, 3,-2, 2,-1, 4, 1, 5, 0, 4, 1, 5, 0},
+	{ 3,-2, 2,-1, 3,-2, 2,-1, 4, 1, 5, 0, 4, 1, 5, 0, 2,-1, 3,-2, 2,-1, 3,-2, 5, 0, 4, 1, 5, 0, 4, 1},
+	{ 4, 1, 5, 0, 4, 1, 5, 0, 2,-1, 3,-2, 2,-1, 3,-2, 5, 0, 4, 1, 5, 0, 4, 1, 3,-2, 2,-1, 3,-2, 2,-1},
+	{ 5, 0, 4, 1, 5, 0, 4, 1, 3,-2, 2,-1, 3,-2, 2,-1, 4, 1, 5, 0, 4, 1, 5, 0, 2,-1, 3,-2, 2,-1, 3,-2},
+	{-2, 2,-1, 3,-2, 2,-1, 3, 1, 5, 0, 4, 1, 5, 0, 4,-1, 3,-2, 2,-1, 3,-2, 2, 0, 4, 1, 5, 0, 4, 1, 5},
+	{-1, 3,-2, 2,-1, 3,-2, 2, 0, 4, 1, 5, 0, 4, 1, 5,-2, 2,-1, 3,-2, 2,-1, 3, 1, 5, 0, 4, 1, 5, 0, 4}
+};
+/*
 	{ 0, 4, 1, 5,-2, 2,-1, 3, 1, 5, 0, 4,-1, 3,-2, 2},
 	{ 1, 5, 0, 4,-1, 3,-2, 2, 0, 4, 1, 5,-2, 2,-1, 3},
 	{ 2,-1, 3,-2, 5, 0, 4, 1, 3,-2, 2,-1, 4, 1, 5, 0},
@@ -79,8 +89,7 @@ static const int8_t Bayer[8][16] = {
 	{ 5, 0, 4, 1, 3,-2, 2,-1, 4, 1, 5, 0, 2,-1, 3,-2},
 	{-2, 2,-1, 3, 1, 5, 0, 4,-1, 3,-2, 2, 0, 4, 1, 5},
 	{-1, 3,-2, 2, 0, 4, 1, 5,-2, 2,-1, 3, 1, 5, 0, 4}
-};
-
+*/
 
 /*---------------------------------------------*/
 /* Conversion table for fast clipping process  */
@@ -605,35 +614,38 @@ static TJpgD::JRESULT mcu_output (
 	uint_fast8_t ixshift = (mx == 16);
 	uint_fast8_t iyshift = (my == 16);
 	iy = 0;
+	uint8_t* prgb = workbuf;
 	do {
-		uint8_t* prgb = &workbuf[mx * iy * 3];
-		btbl = btbase + ((iy & 3) << 2);
+		btbl = btbase + ((iy & 3) << 3);
 		py = &mcubuf[((iy & 8) + iy) << 3];
 		pc = &mcubuf[((mx << iyshift) + (iy >> iyshift)) << 3];
 		ix = 0;
 		do {
 			do {
-				uint_fast16_t idx = ix >> ixshift;
-				float cb = (pc[idx     ] - 128); 	/* Get Cb/Cr component and restore right level */
-				float cr = (pc[idx + 64] - 128);
+				float cb = (pc[ 0] - 128); 	/* Get Cb/Cr component and restore right level */
+				float cr = (pc[64] - 128);
+				++pc;
 
 				/* Convert CbCr to RGB */
 				int32_t gg = fgb * cb + fgr * cr;
 				int32_t rr = frr * cr;
 				int32_t bb = fbb * cb;
-
-				int32_t yy = btbl[ix & 3] + py[ix];			/* Get Y component */
-				prgb[ix*3  ] = BYTECLIP(yy + rr);
-				prgb[ix*3+1] = BYTECLIP(yy - gg);
-				prgb[ix*3+2] = BYTECLIP(yy + bb);
+				int32_t yy = btbl[0] + py[0];			/* Get Y component */
+				prgb[0] = BYTECLIP(yy + rr);
+				prgb[1] = BYTECLIP(yy - gg);
+				prgb[2] = BYTECLIP(yy + bb);
 				if (ixshift) {
-					++ix;
-					yy = btbl[ix & 3] + py[ix];			/* Get Y component */
-					prgb[ix*3  ] = BYTECLIP(yy + rr);
-					prgb[ix*3+1] = BYTECLIP(yy - gg);
-					prgb[ix*3+2] = BYTECLIP(yy + bb);
+					yy = btbl[1] + py[1];			/* Get Y component */
+					prgb[3] = BYTECLIP(yy + rr);
+					prgb[4] = BYTECLIP(yy - gg);
+					prgb[5] = BYTECLIP(yy + bb);
 				}
-			} while (++ix & 7);
+				prgb += 3 << ixshift;
+				btbl += 1 << ixshift;
+				py += 1 << ixshift;
+				ix += 1 << ixshift;
+			} while (ix & 7);
+			btbl -= 8;
 			py += 64 - 8;	/* Jump to next block if double block heigt */
 		} while (ix != mx);
 	} while (++iy != my);
