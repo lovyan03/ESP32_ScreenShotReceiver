@@ -201,7 +201,7 @@
             this.nudHeight.Location = new System.Drawing.Point(111, 0);
             this.nudHeight.Margin = new System.Windows.Forms.Padding(1, 2, 1, 2);
             this.nudHeight.Maximum = new decimal(new int[] {
-            240,
+            320,
             0,
             0,
             0});
@@ -225,7 +225,7 @@
             this.nudWidth.Location = new System.Drawing.Point(32, 0);
             this.nudWidth.Margin = new System.Windows.Forms.Padding(1, 2, 1, 2);
             this.nudWidth.Maximum = new decimal(new int[] {
-            320,
+            480,
             0,
             0,
             0});
@@ -316,7 +316,7 @@
             this.tlpHost.Margin = new System.Windows.Forms.Padding(0);
             this.tlpHost.Name = "tlpHost";
             this.tlpHost.RowCount = 1;
-            this.tlpHost.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 18F));
+            this.tlpHost.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Absolute, 22F));
             this.tlpHost.Size = new System.Drawing.Size(334, 22);
             this.tlpHost.TabIndex = 3;
             // 

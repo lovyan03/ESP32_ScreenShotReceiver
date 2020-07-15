@@ -606,7 +606,7 @@ static TJpgD::JRESULT mcu_output (
 	uint_fast8_t iyshift = (my == 16);
 	iy = 0;
 	do {
-		auto rgb16 = &((uint16_t*)workbuf)[mx * iy];
+		uint8_t* prgb = &workbuf[mx * iy * 3];
 		btbl = btbase + ((iy & 3) << 2);
 		py = &mcubuf[((iy & 8) + iy) << 3];
 		pc = &mcubuf[((mx << iyshift) + (iy >> iyshift)) << 3];
@@ -614,8 +614,7 @@ static TJpgD::JRESULT mcu_output (
 		do {
 			do {
 				uint_fast16_t idx = ix >> ixshift;
-				auto prgb = ((uint32_t*)(&rgb16[ix]));
-				float cb = (pc[idx] - 128); 	/* Get Cb/Cr component and restore right level */
+				float cb = (pc[idx     ] - 128); 	/* Get Cb/Cr component and restore right level */
 				float cr = (pc[idx + 64] - 128);
 
 				/* Convert CbCr to RGB */
@@ -624,42 +623,33 @@ static TJpgD::JRESULT mcu_output (
 				int32_t bb = fbb * cb;
 
 				int32_t yy = btbl[ix & 3] + py[ix];			/* Get Y component */
-				uint_fast8_t r8 = BYTECLIP(yy + rr) & 0xF8;
-				uint_fast8_t g8 = BYTECLIP(yy - gg);
-				uint_fast8_t b5 = BYTECLIP(yy + bb) >> 3;
-				r8 |= g8 >> 5;
-				g8 &= 0x1C;
-				b5 = (g8 << 3) + b5;
-				uint32_t rgbtmp = r8 | b5 << 8;
+				prgb[ix*3  ] = BYTECLIP(yy + rr);
+				prgb[ix*3+1] = BYTECLIP(yy - gg);
+				prgb[ix*3+2] = BYTECLIP(yy + bb);
 				if (ixshift) {
 					++ix;
 					yy = btbl[ix & 3] + py[ix];			/* Get Y component */
-					r8 = BYTECLIP(yy + rr) & 0xF8;
-					g8 = BYTECLIP(yy - gg);
-					b5 = BYTECLIP(yy + bb) >> 3;
-					r8 |= g8 >> 5;
-					g8 &= 0x1C;
-					b5 = (g8 << 3) + b5;
-					rgbtmp = rgbtmp | ( r8 | b5 << 8) << 16;
+					prgb[ix*3  ] = BYTECLIP(yy + rr);
+					prgb[ix*3+1] = BYTECLIP(yy - gg);
+					prgb[ix*3+2] = BYTECLIP(yy + bb);
 				}
-				*prgb = rgbtmp;
 			} while (++ix & 7);
 			py += 64 - 8;	/* Jump to next block if double block heigt */
 		} while (ix != mx);
 	} while (++iy != my);
 
 	if (rx < mx) {
-		uint16_t *s, *d;
-		s = d = (uint16_t*)workbuf;
+		uint8_t *s, *d;
+		s = d = (uint8_t*)workbuf;
+		rx *= 3;
+		mx *= 3;
 		for (size_t y = 1; y < ry; ++y) {
-			memcpy(d += rx, s += mx, rx << 1);	/* Copy effective pixels */
+			memcpy(d += rx, s += mx, rx);	/* Copy effective pixels */
 		}
 	}
 	/* Output the RGB rectangular */
 	return outfunc(jd, workbuf, &rect) ? TJpgD::JDR_OK : TJpgD::JDR_INTR; 
 }
-
-
 
 
 /*-----------------------------------------------------------------------*/
@@ -867,7 +857,7 @@ TJpgD::JRESULT TJpgD::decomp (
 	uint16_t x, y, mx, my;
 	uint16_t rst, rsc;
 	TJpgD::JRESULT rc;
-	uint8_t workbuf[512];
+	uint8_t workbuf[768];
 	uint8_t mcubuf[384];
 	uint8_t yidx = 0;
 
@@ -934,7 +924,7 @@ static uint_fast8_t mcuidx = 0;
 
 static void task_output(void* arg)
 {
-	uint8_t workbuf[512];
+	uint8_t workbuf[768];
 	param_task_output* p = (param_task_output*)arg;
 	queue_t* q;
 //Serial.println("task_output start");
@@ -978,7 +968,7 @@ TJpgD::JRESULT TJpgD::decomp_multitask (
 	uint_fast16_t x, y, mx, my;
 	uint_fast16_t rst, rsc;
 	TJpgD::JRESULT rc;
-	uint8_t workbuf[512];
+	uint8_t workbuf[768];
 	uint_fast16_t yidx = 0;
 
 

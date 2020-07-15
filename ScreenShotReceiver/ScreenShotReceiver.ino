@@ -40,6 +40,7 @@ void setup(void)
 #endif
 
   lcd.begin();
+//lcd.setColorDepth(24);
   lcd.setRotation(0);
   if (lcd.width() < lcd.height())
     lcd.setRotation(1);
