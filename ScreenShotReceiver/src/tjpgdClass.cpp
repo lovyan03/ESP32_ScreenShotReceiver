@@ -70,17 +70,16 @@ static const uint16_t Ipsf[64] = {	/* See also aa_idct.png */
 /* Output bayer pattern table                  */
 /*---------------------------------------------*/
 
-static const int8_t Bayer[8][16] = {
-	{ 0, 4, 1, 5,-2, 2,-1, 3, 1, 5, 0, 4,-1, 3,-2, 2},
-	{ 1, 5, 0, 4,-1, 3,-2, 2, 0, 4, 1, 5,-2, 2,-1, 3},
-	{ 2,-1, 3,-2, 5, 0, 4, 1, 3,-2, 2,-1, 4, 1, 5, 0},
-	{ 3,-2, 2,-1, 4, 1, 5, 0, 2,-1, 3,-2, 5, 0, 4, 1},
-	{ 4, 1, 5, 0, 2,-1, 3,-2, 5, 0, 4, 1, 3,-2, 2,-1},
-	{ 5, 0, 4, 1, 3,-2, 2,-1, 4, 1, 5, 0, 2,-1, 3,-2},
-	{-2, 2,-1, 3, 1, 5, 0, 4,-1, 3,-2, 2, 0, 4, 1, 5},
-	{-1, 3,-2, 2, 0, 4, 1, 5,-2, 2,-1, 3, 1, 5, 0, 4}
+static const int8_t Bayer[8][32] = {
+	{ 0, 4, 1, 5,  0, 4, 1, 5, -2, 2,-1, 3, -2, 2,-1, 3,  1, 5, 0, 4,  1, 5, 0, 4, -1, 3,-2, 2, -1, 3,-2, 2},
+	{ 1, 5, 0, 4,  1, 5, 0, 4, -1, 3,-2, 2, -1, 3,-2, 2,  0, 4, 1, 5,  0, 4, 1, 5, -2, 2,-1, 3, -2, 2,-1, 3},
+	{ 2,-1, 3,-2,  2,-1, 3,-2,  5, 0, 4, 1,  5, 0, 4, 1,  3,-2, 2,-1,  3,-2, 2,-1,  4, 1, 5, 0,  4, 1, 5, 0},
+	{ 3,-2, 2,-1,  3,-2, 2,-1,  4, 1, 5, 0,  4, 1, 5, 0,  2,-1, 3,-2,  2,-1, 3,-2,  5, 0, 4, 1,  5, 0, 4, 1},
+	{ 4, 1, 5, 0,  4, 1, 5, 0,  2,-1, 3,-2,  2,-1, 3,-2,  5, 0, 4, 1,  5, 0, 4, 1,  3,-2, 2,-1,  3,-2, 2,-1},
+	{ 5, 0, 4, 1,  5, 0, 4, 1,  3,-2, 2,-1,  3,-2, 2,-1,  4, 1, 5, 0,  4, 1, 5, 0,  2,-1, 3,-2,  2,-1, 3,-2},
+	{-2, 2,-1, 3, -2, 2,-1, 3,  1, 5, 0, 4,  1, 5, 0, 4, -1, 3,-2, 2, -1, 3,-2, 2,  0, 4, 1, 5,  0, 4, 1, 5},
+	{-1, 3,-2, 2, -1, 3,-2, 2,  0, 4, 1, 5,  0, 4, 1, 5, -2, 2,-1, 3, -2, 2,-1, 3,  1, 5, 0, 4,  1, 5, 0, 4}
 };
-
 
 /*---------------------------------------------*/
 /* Conversion table for fast clipping process  */
@@ -351,16 +350,16 @@ static int_fast16_t huffext (	/* >=0: decoded data, <0: error code */
 			if (nd) {
 				do {
 					++hdata;
-				} while (v != *++hcode && --nd);	/* Search the code word in this bit length */
-				if (nd) {							/* Matched? */
-					jd->dmsk = msk;
-					jd->dptr = dp;
-					return *hdata;					/* Return the decoded data */
-				}
+					if (v == *++hcode) goto huffext_match;	/* Matched? */
+				} while (--nd);	/* Search the code word in this bit length */
 			}
 			if (!--bl) return 0 - (int_fast16_t)TJpgD::JDR_FMT1;	/* Err: code not found (may be collapted data) */
 		} while (msk);
 	}
+huffext_match:
+	jd->dmsk = msk;
+	jd->dptr = dp;
+	return *hdata;					/* Return the decoded data */
 }
 
 /*-----------------------------------------------------------------------*/
@@ -605,61 +604,54 @@ static TJpgD::JRESULT mcu_output (
 	uint_fast8_t ixshift = (mx == 16);
 	uint_fast8_t iyshift = (my == 16);
 	iy = 0;
+	uint8_t* prgb = workbuf;
 	do {
-		auto rgb16 = &((uint16_t*)workbuf)[mx * iy];
-		btbl = btbase + ((iy & 3) << 2);
+		btbl = &btbase[(iy & 3) << 3];
 		py = &mcubuf[((iy & 8) + iy) << 3];
 		pc = &mcubuf[((mx << iyshift) + (iy >> iyshift)) << 3];
 		ix = 0;
 		do {
 			do {
-				uint_fast16_t idx = ix >> ixshift;
-				auto prgb = ((uint32_t*)(&rgb16[ix]));
-				float cb = (pc[idx] - 128); 	/* Get Cb/Cr component and restore right level */
-				float cr = (pc[idx + 64] - 128);
+				float cb = (pc[ 0] - 128); 	/* Get Cb/Cr component and restore right level */
+				float cr = (pc[64] - 128);
+				++pc;
 
 				/* Convert CbCr to RGB */
 				int32_t gg = fgb * cb + fgr * cr;
 				int32_t rr = frr * cr;
 				int32_t bb = fbb * cb;
-
-				int32_t yy = btbl[ix & 3] + py[ix];			/* Get Y component */
-				uint_fast8_t r8 = BYTECLIP(yy + rr) & 0xF8;
-				uint_fast8_t g8 = BYTECLIP(yy - gg);
-				uint_fast8_t b5 = BYTECLIP(yy + bb) >> 3;
-				r8 |= g8 >> 5;
-				g8 &= 0x1C;
-				b5 = (g8 << 3) + b5;
-				uint32_t rgbtmp = r8 | b5 << 8;
+				int32_t yy = btbl[0] + py[0];			/* Get Y component */
+				prgb[0] = BYTECLIP(yy + rr);
+				prgb[1] = BYTECLIP(yy - gg);
+				prgb[2] = BYTECLIP(yy + bb);
 				if (ixshift) {
-					++ix;
-					yy = btbl[ix & 3] + py[ix];			/* Get Y component */
-					r8 = BYTECLIP(yy + rr) & 0xF8;
-					g8 = BYTECLIP(yy - gg);
-					b5 = BYTECLIP(yy + bb) >> 3;
-					r8 |= g8 >> 5;
-					g8 &= 0x1C;
-					b5 = (g8 << 3) + b5;
-					rgbtmp = rgbtmp | ( r8 | b5 << 8) << 16;
+					yy = btbl[1] + py[1];			/* Get Y component */
+					prgb[3] = BYTECLIP(yy + rr);
+					prgb[4] = BYTECLIP(yy - gg);
+					prgb[5] = BYTECLIP(yy + bb);
 				}
-				*prgb = rgbtmp;
-			} while (++ix & 7);
+				prgb += 3 << ixshift;
+				btbl += 1 << ixshift;
+				py += 1 << ixshift;
+				ix += 1 << ixshift;
+			} while (ix & 7);
+			btbl -= 8;
 			py += 64 - 8;	/* Jump to next block if double block heigt */
 		} while (ix != mx);
 	} while (++iy != my);
 
 	if (rx < mx) {
-		uint16_t *s, *d;
-		s = d = (uint16_t*)workbuf;
+		uint8_t *s, *d;
+		s = d = (uint8_t*)workbuf;
+		rx *= 3;
+		mx *= 3;
 		for (size_t y = 1; y < ry; ++y) {
-			memcpy(d += rx, s += mx, rx << 1);	/* Copy effective pixels */
+			memcpy(d += rx, s += mx, rx);	/* Copy effective pixels */
 		}
 	}
 	/* Output the RGB rectangular */
 	return outfunc(jd, workbuf, &rect) ? TJpgD::JDR_OK : TJpgD::JDR_INTR; 
 }
-
-
 
 
 /*-----------------------------------------------------------------------*/
@@ -867,7 +859,7 @@ TJpgD::JRESULT TJpgD::decomp (
 	uint16_t x, y, mx, my;
 	uint16_t rst, rsc;
 	TJpgD::JRESULT rc;
-	uint8_t workbuf[512];
+	uint8_t workbuf[768];
 	uint8_t mcubuf[384];
 	uint8_t yidx = 0;
 
@@ -934,7 +926,7 @@ static uint_fast8_t mcuidx = 0;
 
 static void task_output(void* arg)
 {
-	uint8_t workbuf[512];
+	uint8_t workbuf[768];
 	param_task_output* p = (param_task_output*)arg;
 	queue_t* q;
 //Serial.println("task_output start");
@@ -978,7 +970,7 @@ TJpgD::JRESULT TJpgD::decomp_multitask (
 	uint_fast16_t x, y, mx, my;
 	uint_fast16_t rst, rsc;
 	TJpgD::JRESULT rc;
-	uint8_t workbuf[512];
+	uint8_t workbuf[768];
 	uint_fast16_t yidx = 0;
 
 
