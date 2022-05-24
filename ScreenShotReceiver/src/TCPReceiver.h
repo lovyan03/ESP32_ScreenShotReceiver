@@ -4,6 +4,8 @@
 #pragma GCC optimize ("O3")
 
 #ifndef LOVYANGFX_HPP_
+#define LGFX_USE_V1
+#define LGFX_AUTODETECT
 #include <LovyanGFX.hpp>  // https://github.com/lovyan03/LovyanGFX/
 #endif
 
@@ -11,8 +13,6 @@
 #include <WiFiServer.h>
 #include <esp_heap_caps.h>
 #include "tjpgdClass.h"
-
-#undef min
 
 class TCPReceiver
 {
@@ -26,11 +26,14 @@ public:
     _lcd_width = lcd->width();
     _lcd_height = lcd->height();
     _bytesize = lcd->getColorConverter()->bytes;
-    _fp_jpgWrite = (_bytesize == 2)
-                 ? jpgWrite16
-                 : jpgWrite24
-                 ;
-    for (int i = 0; i < 2; ++i) _dmabufs[i] = (uint8_t*)heap_caps_malloc(_lcd_width * 48 * _bytesize, MALLOC_CAP_DMA);
+    Serial.printf("display byte per pixel:%d\n", _bytesize);
+
+    if (_bytesize == 3)
+    {
+      _fp_jpgWrite = jpgWrite24;
+      _fp_jpgWriteRow = jpgWriteRow24;
+    }
+    for (int i = 0; i < 2; ++i) { _dmabufs[i] = (uint8_t*)heap_caps_malloc(_lcd_width * (_rowskip + 1) * 16 * _bytesize, MALLOC_CAP_DMA); }
 
     _dmabuf = _dmabufs[0];
 
@@ -139,8 +142,6 @@ private:
   uint32_t _delayCount = 0;
   uint8_t _tcpBuf[TCP_BUF_LEN];
   bool _recv_requested = false;
-
-  uint32_t(*_fp_jpgWrite)(TJpgD*,void*,TJpgD::JRECT*);
 
   static uint32_t jpgRead(TJpgD *jdec, uint8_t *buf, uint32_t len) {
     TCPReceiver* me = (TCPReceiver*)jdec->device;
@@ -299,7 +300,7 @@ private:
     return 1;
   }
 
-  static uint32_t jpgWriteRow(TJpgD *jdec, uint32_t y, uint32_t h) {
+  static uint32_t jpgWriteRow16(TJpgD *jdec, uint32_t y, uint32_t h) {
     static int flip = 0;
     TCPReceiver* me = (TCPReceiver*)jdec->device;
 
@@ -317,20 +318,45 @@ private:
       h = me->_lcd_height - (me->_jpg_y + outY);
     }
 
-    me->_lcd->pushPixelsDMA(me->_dmabuf, me->_out_width * h);
+    me->_lcd->pushPixelsDMA((lgfx::swap565_t*)(me->_dmabuf), me->_out_width * h);
 
     flip = !flip;
     me->_dmabuf = me->_dmabufs[flip];
     return 1;
   }
 
-  bool drawJpg() {
+  static uint32_t jpgWriteRow24(TJpgD *jdec, uint32_t y, uint32_t h) {
+    static int flip = 0;
+    TCPReceiver* me = (TCPReceiver*)jdec->device;
+
+    if (y == 0)
+      me->_lcd->setAddrWindow(me->_jpg_x, me->_jpg_y, me->_out_width, me->_out_height);
+
+    int16_t outY = y - me->_off_y;
+    if (outY < 0) {
+      if (h <= - outY) return 1;
+      h += outY;
+      outY = 0;
+    }
+    if (me->_lcd_height <= me->_jpg_y + outY) return 1;
+    if (me->_lcd_height < me->_jpg_y + outY + h) {
+      h = me->_lcd_height - (me->_jpg_y + outY);
+    }
+
+    me->_lcd->pushPixelsDMA((lgfx::bgr888_t*)(me->_dmabuf), me->_out_width * h);
+
+    flip = !flip;
+    me->_dmabuf = me->_dmabufs[flip];
+    return 1;
+  }
+
+  bool drawJpg(void) {
     TJpgD::JRESULT jres = _jdec.prepare(jpgRead, this);
     if (jres != TJpgD::JDR_OK) {
       Serial.printf("prepare failed! %d\r\n", jres);
       return false;
     }
-    _out_width = std::min<int32_t>(_jdec.width, _lcd_width);
+    _out_width = _jdec.width < _lcd_width ? _jdec.width : _lcd_width;
     _jpg_x = (_lcd_width - _jdec.width) >> 1;
     if (0 > _jpg_x) {
       _off_x = - _jpg_x;
@@ -338,7 +364,7 @@ private:
     } else {
       _off_x = 0;
     }
-    _out_height = std::min<int32_t>(_jdec.height, _lcd_height);
+    _out_height = _jdec.height < _lcd_height ? _jdec.height : _lcd_height;
     _jpg_y = (_lcd_height- _jdec.height) >> 1;
     if (0 > _jpg_y) {
       _off_y = - _jpg_y;
@@ -347,7 +373,7 @@ private:
       _off_y = 0;
     }
 
-    jres = _jdec.decomp_multitask(_fp_jpgWrite, jpgWriteRow, _rowskip);
+    jres = _jdec.decomp_multitask(_fp_jpgWrite, _fp_jpgWriteRow, _rowskip);
     if (jres != TJpgD::JDR_OK) {
       Serial.printf("decomp failed! %d\r\n", jres);
       return false;
@@ -355,6 +381,9 @@ private:
 
     return true;
   }
+
+  uint32_t(*_fp_jpgWrite)(TJpgD*,void*,TJpgD::JRECT*) = jpgWrite16;
+  uint32_t (*_fp_jpgWriteRow)(TJpgD *jdec, uint32_t y, uint32_t h) = jpgWriteRow16;
 };
 
 #endif
