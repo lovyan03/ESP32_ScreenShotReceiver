@@ -53,6 +53,7 @@ public:
     if (SENDER_PREFIX_SIZE <= _client.available()
      && SENDER_PREFIX_SIZE == _client.read(_tcpBuf, SENDER_PREFIX_SIZE)) {
       waitCount = 0;
+      _recv_requested = false;
       if (_tcpBuf[0] == 'J'
        && _tcpBuf[1] == 'P'
        && _tcpBuf[2] == 'G') {
@@ -149,10 +150,7 @@ private:
     uint32_t retry;
 
     if (len == TJPGD_SZBUF) {
-      if (me->_recv_requested) {
-        me->_recv_requested = false;
-      } else
-      if (me->_recv_remain < TJPGD_SZBUF*2 && TJPGD_SZBUF < me->_recv_remain) { // dataend read tweak
+      if (me->_recv_remain < TJPGD_SZBUF * 2 && TJPGD_SZBUF < me->_recv_remain) { // dataend read tweak
         len = me->_recv_remain - len;
       }
     } else if (client->available() < len) {
@@ -176,14 +174,9 @@ private:
       return 0;
     }
     me->_recv_remain -= l;
-    if (!me->_recv_requested && me->_recv_remain < 3) {
-      if (me->_recv_remain >= client->available()) {
-        client->print("JPG\n"); // request the next image from the client
-        me->_recv_requested = true;
-      } else {
-        Serial.println("excessive request");
-        me->_recv_requested = true;
-      }
+    if (!me->_recv_requested && me->_recv_remain <= client->available()) {
+      me->_recv_requested = true;
+      client->print("JPG\n"); // request the next image from the client
     }
     return l;
   }
