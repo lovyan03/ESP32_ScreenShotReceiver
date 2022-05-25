@@ -730,7 +730,7 @@ TJpgD::JRESULT TJpgD::prepare (
 	inbuf = seg = dptr = (uint8_t*)alloc_pool(this, TJPGD_SZBUF);		/* Allocate stream input buffer */
 	if (!seg) return TJpgD::JDR_MEM1;
 
-	uint32_t dctr = infunc(this, dptr, TJPGD_SZBUF);
+	uint32_t dctr = infunc(this, dptr, 16);
 	seg = dptr;
 	if (dctr <= 2) return TJpgD::JDR_INP;/* Check SOI marker */
 	if (LDB_WORD(seg) != 0xFFD8) return TJpgD::JDR_FMT1;	/* Err: SOI is not detected */
