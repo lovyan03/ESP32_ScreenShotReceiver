@@ -28,10 +28,18 @@ public:
     _bytesize = lcd->getColorConverter()->bytes;
     Serial.printf("display byte per pixel:%d\n", _bytesize);
 
-    if (_bytesize == 3)
+    switch (_bytesize)
     {
+    default:
+    case 2:
+      _fp_jpgWrite = jpgWrite16;
+      break;
+    case 3:
       _fp_jpgWrite = jpgWrite24;
-      _fp_jpgWriteRow = jpgWriteRow24;
+      break;
+    case 1:
+      _fp_jpgWrite = jpgWrite8;
+      break;
     }
     for (int i = 0; i < 2; ++i) { _dmabufs[i] = (uint8_t*)heap_caps_malloc(_lcd_width * (_rowskip + 1) * 16 * _bytesize, MALLOC_CAP_DMA); }
 
@@ -80,9 +88,8 @@ public:
           }
         }
       } else {
-        Serial.println("broken data");
-        delay(10);
-        while (0 < _client.read(_tcpBuf, TCP_BUF_LEN)) delay(10);
+        Serial.printf("broken data: %02x %02x %02x %02x %02x %02x %02x \n", _tcpBuf[0], _tcpBuf[1], _tcpBuf[2], _tcpBuf[3], _tcpBuf[4], _tcpBuf[5], _tcpBuf[6], _tcpBuf[7]);
+        do { delay(8); } while (0 < _client.read(_tcpBuf, TCP_BUF_LEN));
       }
     } else
     if (!_client.connected()) {
@@ -149,7 +156,9 @@ private:
     WiFiClient* client = &me->_client;
     uint32_t retry;
 
-    if (len == TJPGD_SZBUF) {
+    if (len > me->_recv_remain) {
+      len = me->_recv_remain;
+    } else if (len == TJPGD_SZBUF) {
       if (me->_recv_remain < TJPGD_SZBUF * 2 && TJPGD_SZBUF < me->_recv_remain) { // dataend read tweak
         len = me->_recv_remain - len;
       }
@@ -293,37 +302,69 @@ private:
     return 1;
   }
 
-  static uint32_t jpgWriteRow16(TJpgD *jdec, uint32_t y, uint32_t h) {
-    static int flip = 0;
+  static uint32_t jpgWrite8(TJpgD *jdec, void *bitmap, TJpgD::JRECT *rect) {
     TCPReceiver* me = (TCPReceiver*)jdec->device;
 
-    if (y == 0)
-      me->_lcd->setAddrWindow(me->_jpg_x, me->_jpg_y, me->_out_width, me->_out_height);
+    uint8_t *dst = (uint8_t *)me->_dmabuf;
 
-    int16_t outY = y - me->_off_y;
-    if (outY < 0) {
-      if (h <= - outY) return 1;
-      h += outY;
-      outY = 0;
+    uint_fast16_t x = rect->left;
+    uint_fast16_t y = rect->top;
+    uint_fast16_t w = rect->right + 1 - x;
+    uint_fast16_t h = rect->bottom + 1 - y;
+    uint_fast16_t outWidth = me->_out_width;
+    uint_fast16_t outHeight = me->_out_height;
+    uint8_t *src = (uint8_t*)bitmap;
+    uint_fast16_t oL = 0, oR = 0;
+
+    if (rect->right < me->_off_x)      return 1;
+    if (x >= (me->_off_x + outWidth))  return 1;
+    if (rect->bottom < me->_off_y)     return 1;
+    if (y >= (me->_off_y + outHeight)) return 1;
+
+    uint_fast16_t tmpy = y % ((1 + _rowskip) * jdec->msy << 3);
+    if (me->_off_y > y) {
+      uint_fast16_t linesToSkip = me->_off_y - y;
+      src += linesToSkip * w * 3;
+      h -= linesToSkip;
+      dst -= tmpy * outWidth;
+    } else 
+    if (me->_off_y > (y - tmpy)) {
+      uint_fast16_t linesToSkip = me->_off_y - (y - tmpy);
+      dst -= linesToSkip * outWidth;
     }
-    if (me->_lcd_height <= me->_jpg_y + outY) return 1;
-    if (me->_lcd_height < me->_jpg_y + outY + h) {
-      h = me->_lcd_height - (me->_jpg_y + outY);
+
+    if (me->_off_x > x) {
+      oL = me->_off_x - x;
+    }
+    if (rect->right >= (me->_off_x + outWidth)) {
+      oR = (rect->right + 1) - (me->_off_x + outWidth);
     }
 
-    me->_lcd->pushPixelsDMA((lgfx::swap565_t*)(me->_dmabuf), me->_out_width * h);
+    int_fast16_t line = (w - ( oL + oR ));
+    dst += oL + x - me->_off_x + outWidth * tmpy;
+    src += oL * 3;
+    do {
+      int i = 0;
+      do {
+        uint_fast8_t r8 = src[i*3+0] & 0xE0;
+        uint_fast8_t g5 = (src[i*3+1] >> 3) & 0x1C;
+        uint_fast8_t b2 = src[i*3+2] >> 6;
+        dst[i] = r8 | g5 | b2;
+      } while (++i != line);
+      dst += outWidth;
+      src += w * 3;
+    } while (--h);
 
-    flip = !flip;
-    me->_dmabuf = me->_dmabufs[flip];
     return 1;
   }
 
-  static uint32_t jpgWriteRow24(TJpgD *jdec, uint32_t y, uint32_t h) {
+  static uint32_t jpgWriteRow(TJpgD *jdec, uint32_t y, uint32_t h) {
     static int flip = 0;
     TCPReceiver* me = (TCPReceiver*)jdec->device;
 
-    if (y == 0)
+    if (y == 0) {
       me->_lcd->setAddrWindow(me->_jpg_x, me->_jpg_y, me->_out_width, me->_out_height);
+    }
 
     int16_t outY = y - me->_off_y;
     if (outY < 0) {
@@ -336,7 +377,13 @@ private:
       h = me->_lcd_height - (me->_jpg_y + outY);
     }
 
-    me->_lcd->pushPixelsDMA((lgfx::bgr888_t*)(me->_dmabuf), me->_out_width * h);
+    switch (me->_lcd->getColorConverter()->bytes)
+    {
+    default:
+    case 2:  me->_lcd->pushPixelsDMA((lgfx::swap565_t*)(me->_dmabuf), me->_out_width * h);  break;
+    case 1:  me->_lcd->pushPixelsDMA((lgfx::rgb332_t*)(me->_dmabuf), me->_out_width * h);  break;
+    case 3:  me->_lcd->pushPixelsDMA((lgfx::bgr888_t*)(me->_dmabuf), me->_out_width * h);  break;
+    }
 
     flip = !flip;
     me->_dmabuf = me->_dmabufs[flip];
@@ -366,7 +413,7 @@ private:
       _off_y = 0;
     }
 
-    jres = _jdec.decomp_multitask(_fp_jpgWrite, _fp_jpgWriteRow, _rowskip);
+    jres = _jdec.decomp_multitask(_fp_jpgWrite, jpgWriteRow, _rowskip);
     if (jres != TJpgD::JDR_OK) {
       Serial.printf("decomp failed! %d\r\n", jres);
       return false;
@@ -376,7 +423,6 @@ private:
   }
 
   uint32_t(*_fp_jpgWrite)(TJpgD*,void*,TJpgD::JRECT*) = jpgWrite16;
-  uint32_t (*_fp_jpgWriteRow)(TJpgD *jdec, uint32_t y, uint32_t h) = jpgWriteRow16;
 };
 
 #endif
